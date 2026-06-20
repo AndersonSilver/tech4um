@@ -1,19 +1,43 @@
 import jwt from "jsonwebtoken";
+import { randomUUID } from "crypto";
 
 export interface TokenPayload {
   sub: string; // user id
   username: string;
+  jti: string; // identificador único do token (necessário para revogação/blacklist)
 }
 
 export class TokenService {
-  private static secret = process.env.JWT_SECRET || "dev_secret";
-  private static expiresIn = process.env.JWT_EXPIRES_IN || "1d";
+  private static getSecret(): string {
+    const secret = process.env.JWT_SECRET;
+    if (!secret || secret.length < 16) {
+      // Falha rápida: nunca rodar com segredo ausente/fraco, especialmente em produção.
+      throw new Error(
+        "JWT_SECRET não configurado ou muito curto (mínimo 16 caracteres). Configure a variável de ambiente antes de iniciar o servidor."
+      );
+    }
+    return secret;
+  }
 
-  static sign(payload: TokenPayload): string {
-    return jwt.sign(payload, this.secret, { expiresIn: this.expiresIn });
+  private static expiresIn = process.env.JWT_EXPIRES_IN || "2h";
+
+  static sign(payload: Omit<TokenPayload, "jti">): string {
+    const jti = randomUUID();
+    return jwt.sign({ ...payload, jti }, this.getSecret(), { expiresIn: this.expiresIn });
   }
 
   static verify(token: string): TokenPayload {
-    return jwt.verify(token, this.secret) as TokenPayload;
+    return jwt.verify(token, this.getSecret()) as TokenPayload;
+  }
+
+  /**
+   * Decodifica o token SEM verificar assinatura/expiração.
+   * Usado apenas para checagens não-críticas (ex.: revalidação periódica de socket
+   * para decidir quando vale a pena chamar `verify` novamente). Nunca usar o resultado
+   * deste método para decisões de autorização.
+   */
+  static decodeUnsafe(token: string): TokenPayload | null {
+    const decoded = jwt.decode(token);
+    return (decoded as TokenPayload) ?? null;
   }
 }

@@ -5,18 +5,23 @@ import { useAuth } from "./AuthContext";
 const SocketContext = createContext<Socket | null>(null);
 
 export function SocketProvider({ children }: { children: ReactNode }) {
-  const { token, isAuthenticated } = useAuth();
+  const { isAuthenticated, isLoading } = useAuth();
   const socketRef = useRef<Socket | null>(null);
 
   useEffect(() => {
-    if (!isAuthenticated || !token) {
+    if (isLoading) return;
+
+    if (!isAuthenticated) {
       socketRef.current?.disconnect();
       socketRef.current = null;
       return;
     }
 
+    // O token vive em cookie httpOnly — `withCredentials` faz o navegador
+    // enviar esse cookie no handshake do WebSocket automaticamente.
+    // O backend extrai e valida o token a partir do header `cookie` do handshake.
     const socket = io(import.meta.env.VITE_SOCKET_URL || "http://localhost:3333", {
-      auth: { token },
+      withCredentials: true,
     });
 
     socketRef.current = socket;
@@ -24,7 +29,7 @@ export function SocketProvider({ children }: { children: ReactNode }) {
     return () => {
       socket.disconnect();
     };
-  }, [isAuthenticated, token]);
+  }, [isAuthenticated, isLoading]);
 
   return (
     <SocketContext.Provider value={socketRef.current}>{children}</SocketContext.Provider>

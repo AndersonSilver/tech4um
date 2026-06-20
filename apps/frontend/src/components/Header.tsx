@@ -9,8 +9,8 @@ export function Header({ onLoginClick }: HeaderProps) {
   const { user, isAuthenticated, logout } = useAuth();
   const navigate = useNavigate();
 
-  function handleLogout() {
-    logout();
+  async function handleLogout() {
+    await logout();
     navigate("/");
   }
 

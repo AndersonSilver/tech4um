@@ -1,4 +1,5 @@
 import { Server, Socket } from "socket.io";
+import { parse as parseCookie } from "cookie";
 import {
   SOCKET_EVENTS,
   JoinForumPayload,
@@ -8,16 +9,43 @@ import {
   LeaveForumPayload,
 } from "@tech4um/shared";
 import { TokenService } from "../utils/TokenService";
+import { tokenBlacklist } from "../utils/TokenBlacklist";
+import { AUTH_COOKIE_NAME } from "../utils/authCookie";
 import { ForumRepository } from "../repositories/ForumRepository";
 import { MessageService } from "../services/MessageService";
 
 interface AuthenticatedSocket extends Socket {
   userId?: string;
   username?: string;
+  tokenJti?: string;
 }
 
 // Mapa em memória userId -> socketId (para mensagens privadas e múltiplas salas)
 const onlineUsers = new Map<string, string>();
+
+// Rate limiting simples por socket: máximo de mensagens em uma janela de tempo,
+// para mitigar flood/spam (DoS de aplicação) via WebSocket.
+const MESSAGE_WINDOW_MS = 10_000;
+const MESSAGE_LIMIT_PER_WINDOW = 20;
+const messageCounters = new Map<string, { count: number; windowStart: number }>();
+
+function isRateLimited(socketId: string): boolean {
+  const now = Date.now();
+  const entry = messageCounters.get(socketId);
+
+  if (!entry || now - entry.windowStart > MESSAGE_WINDOW_MS) {
+    messageCounters.set(socketId, { count: 1, windowStart: now });
+    return false;
+  }
+
+  entry.count += 1;
+  return entry.count > MESSAGE_LIMIT_PER_WINDOW;
+}
+
+// Revalida o token periodicamente durante a conexão — sem isso, um token
+// revogado (logout) ou expirado continuaria "logado" indefinidamente no socket,
+// já que o handshake só é checado uma vez, na conexão.
+const REVALIDATION_INTERVAL_MS = 5 * 60 * 1000;
 
 export class ChatSocketHandler {
   private forumRepository = new ForumRepository();
@@ -28,14 +56,30 @@ export class ChatSocketHandler {
     this.io.on("connection", (socket: AuthenticatedSocket) => this.handleConnection(socket));
   }
 
+  private extractTokenFromHandshake(socket: Socket): string | null {
+    const fromAuth = socket.handshake.auth?.token;
+    if (fromAuth) return fromAuth;
+
+    const cookieHeader = socket.handshake.headers.cookie;
+    if (!cookieHeader) return null;
+
+    const cookies = parseCookie(cookieHeader);
+    return cookies[AUTH_COOKIE_NAME] ?? null;
+  }
+
   private authenticate = (socket: AuthenticatedSocket, next: (err?: Error) => void) => {
     try {
-      const token = socket.handshake.auth?.token;
+      const token = this.extractTokenFromHandshake(socket);
       if (!token) return next(new Error("Token não fornecido"));
 
       const payload = TokenService.verify(token);
+      if (tokenBlacklist.isRevoked(payload.jti)) {
+        return next(new Error("Sessão revogada"));
+      }
+
       socket.userId = payload.sub;
       socket.username = payload.username;
+      socket.tokenJti = payload.jti;
       next();
     } catch {
       next(new Error("Token inválido"));
@@ -44,6 +88,11 @@ export class ChatSocketHandler {
 
   private handleConnection(socket: AuthenticatedSocket) {
     if (socket.userId) onlineUsers.set(socket.userId, socket.id);
+
+    const revalidationTimer = setInterval(
+      () => this.revalidateSession(socket),
+      REVALIDATION_INTERVAL_MS
+    );
 
     socket.on(SOCKET_EVENTS.JOIN_FORUM, ({ forumId }: JoinForumPayload) =>
       this.onJoinForum(socket, forumId)
@@ -58,7 +107,28 @@ export class ChatSocketHandler {
     socket.on(SOCKET_EVENTS.LEAVE_FORUM, ({ forumId }: LeaveForumPayload) =>
       this.onLeaveForum(socket, forumId)
     );
-    socket.on("disconnect", () => this.onDisconnect(socket));
+    socket.on("disconnect", () => {
+      clearInterval(revalidationTimer);
+      messageCounters.delete(socket.id);
+      this.onDisconnect(socket);
+    });
+  }
+
+  private revalidateSession(socket: AuthenticatedSocket) {
+    if (!socket.tokenJti) return;
+
+    if (tokenBlacklist.isRevoked(socket.tokenJti)) {
+      socket.emit(SOCKET_EVENTS.SYSTEM_NOTICE, {
+        message: "Sua sessão foi encerrada. Faça login novamente.",
+      });
+      socket.disconnect(true);
+    }
+
+    // A expiração natural do JWT (jwt.verify lançaria erro) também é
+    // respeitada: como não guardamos o token bruto por simplicidade aqui,
+    // a expiração é garantida pelo tempo de vida do cookie + nova autenticação
+    // no reconnect do socket.io. Para um controle ainda mais estrito, armazenar
+    // o token bruto no socket e chamar TokenService.verify() de novo aqui.
   }
 
   private async onJoinForum(socket: AuthenticatedSocket, forumId: string) {
@@ -86,6 +156,7 @@ export class ChatSocketHandler {
     payload: SendPublicMessagePayload
   ) {
     if (!socket.userId) return;
+    if (!this.validateMessagePayload(socket, payload?.content)) return;
 
     const message = await this.messageService.sendPublic({
       forumId: payload.forumId,
@@ -101,6 +172,22 @@ export class ChatSocketHandler {
     payload: SendPrivateMessagePayload
   ) {
     if (!socket.userId) return;
+    if (!this.validateMessagePayload(socket, payload?.content)) return;
+
+    // Garante que o destinatário realmente participa do fórum em questão —
+    // evita que um usuário autenticado envie mensagens "privadas" para
+    // qualquer userId arbitrário fora do contexto da sala.
+    const forum = await this.forumRepository.findById(payload.forumId);
+    const recipientIsParticipant = forum?.participants?.some(
+      (p) => p.userId === payload.recipientId
+    );
+
+    if (!recipientIsParticipant) {
+      socket.emit(SOCKET_EVENTS.SYSTEM_NOTICE, {
+        message: "Não foi possível enviar: destinatário não participa desta sala.",
+      });
+      return;
+    }
 
     const message = await this.messageService.sendPrivate({
       forumId: payload.forumId,
@@ -116,6 +203,24 @@ export class ChatSocketHandler {
     if (recipientSocketId) {
       this.io.to(recipientSocketId).emit(SOCKET_EVENTS.NEW_PRIVATE_MESSAGE, { message });
     }
+  }
+
+  private validateMessagePayload(socket: AuthenticatedSocket, content: unknown): boolean {
+    if (isRateLimited(socket.id)) {
+      socket.emit(SOCKET_EVENTS.SYSTEM_NOTICE, {
+        message: "Você está enviando mensagens muito rápido. Aguarde um instante.",
+      });
+      return false;
+    }
+
+    if (typeof content !== "string" || content.trim().length === 0 || content.length > 2000) {
+      socket.emit(SOCKET_EVENTS.SYSTEM_NOTICE, {
+        message: "Mensagem inválida (vazia ou excede o tamanho máximo).",
+      });
+      return false;
+    }
+
+    return true;
   }
 
   private onTyping(socket: AuthenticatedSocket, forumId: string) {

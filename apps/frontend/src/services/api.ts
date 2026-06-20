@@ -2,12 +2,7 @@ import axios from "axios";
 
 export const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL || "http://localhost:3333/api",
-});
-
-api.interceptors.request.use((config) => {
-  const token = localStorage.getItem("@tech4um:token");
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
-  }
-  return config;
+  // Necessário para que o cookie httpOnly de autenticação seja enviado/recebido
+  // nas requisições. Substitui o uso de localStorage + header Authorization.
+  withCredentials: true,
 });

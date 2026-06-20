@@ -15,7 +15,10 @@ export const AppDataSource = new DataSource({
   username: process.env.DB_USER,
   password: process.env.DB_PASSWORD,
   database: process.env.DB_NAME,
-  synchronize: true, // usar apenas em desenvolvimento; em produção, usar migrations
+  // CRÍTICO: nunca usar synchronize=true em produção — pode alterar o schema
+  // do banco de forma destrutiva e sem controle de versão. Em produção, usar
+  // sempre `npm run migration:run`.
+  synchronize: process.env.NODE_ENV !== "production",
   logging: false,
   entities: [User, Forum, Message, ForumParticipant],
   migrations: ["src/migrations/*.ts"],

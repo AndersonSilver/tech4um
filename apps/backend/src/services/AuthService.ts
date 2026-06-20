@@ -10,7 +10,15 @@ export class AuthService {
 
   async register(input: RegisterRequestDTO): Promise<AuthResponseDTO> {
     const existingEmail = await this.userRepository.findByEmail(input.email);
-    if (existingEmail) throw new AppError("E-mail já cadastrado", 409);
+    if (existingEmail) {
+      // Mensagem deliberadamente genérica: não confirma se o e-mail já existe,
+      // para evitar enumeração de contas (diferente do username, que é um
+      // identificador público e portanto ok revelar).
+      throw new AppError(
+        "Não foi possível concluir o cadastro com os dados informados. Verifique o e-mail ou tente fazer login.",
+        409
+      );
+    }
 
     const existingUsername = await this.userRepository.findByUsername(input.username);
     if (existingUsername) throw new AppError("Nome de usuário já em uso", 409);

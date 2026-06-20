@@ -27,15 +27,15 @@ describe("AuthService", () => {
     return { service: new AuthService(fakeRepository), repository: fakeRepository };
   }
 
-  it("não permite cadastro com e-mail já existente", async () => {
+  it("não permite cadastro com e-mail já existente (mensagem genérica anti-enumeração)", async () => {
     const existingUser = buildFakeUser();
     const { service } = buildService({
       findByEmail: jest.fn().mockResolvedValue(existingUser),
     } as any);
 
     await expect(
-      service.register({ username: "novo", email: "lara@email.com", password: "123456" })
-    ).rejects.toThrow("E-mail já cadastrado");
+      service.register({ username: "novo", email: "lara@email.com", password: "Senha123" })
+    ).rejects.toThrow(/não foi possível concluir o cadastro/i);
   });
 
   it("não permite cadastro com username já existente", async () => {
@@ -45,7 +45,7 @@ describe("AuthService", () => {
     } as any);
 
     await expect(
-      service.register({ username: "lara", email: "novo@email.com", password: "123456" })
+      service.register({ username: "lara", email: "novo@email.com", password: "Senha123" })
     ).rejects.toThrow("Nome de usuário já em uso");
   });
 
@@ -60,7 +60,7 @@ describe("AuthService", () => {
     const result = await service.register({
       username: "novo",
       email: "novo@email.com",
-      password: "123456",
+      password: "Senha123",
     });
 
     expect(result.token).toBeDefined();
@@ -72,7 +72,7 @@ describe("AuthService", () => {
       findByEmail: jest.fn().mockResolvedValue(null),
     } as any);
 
-    await expect(service.login({ email: "x@x.com", password: "123456" })).rejects.toThrow(
+    await expect(service.login({ email: "x@x.com", password: "Senha123" })).rejects.toThrow(
       "Credenciais inválidas"
     );
   });

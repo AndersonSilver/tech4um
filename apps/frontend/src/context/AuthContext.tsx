@@ -4,59 +4,72 @@ import { User } from "../types";
 
 interface AuthContextData {
   user: User | null;
-  token: string | null;
   isAuthenticated: boolean;
+  isLoading: boolean;
   login: (email: string, password: string) => Promise<void>;
   register: (username: string, email: string, password: string) => Promise<void>;
   loginWithGoogle: (idToken: string) => Promise<void>;
-  logout: () => void;
+  logout: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextData>({} as AuthContextData);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
-  const [token, setToken] = useState<string | null>(
-    localStorage.getItem("@tech4um:token")
-  );
+  const [isLoading, setIsLoading] = useState(true);
 
+  // O token vive em um cookie httpOnly (o JS nunca tem acesso a ele).
+  // Para saber se há uma sessão válida, perguntamos ao backend via /auth/me —
+  // o cookie é enviado automaticamente pelo navegador.
   useEffect(() => {
-    const storedUser = localStorage.getItem("@tech4um:user");
-    if (storedUser) setUser(JSON.parse(storedUser));
+    restoreSession();
   }, []);
 
-  function persistSession(newToken: string, newUser: User) {
-    localStorage.setItem("@tech4um:token", newToken);
-    localStorage.setItem("@tech4um:user", JSON.stringify(newUser));
-    setToken(newToken);
-    setUser(newUser);
+  async function restoreSession() {
+    try {
+      const { data } = await api.get<User>("/auth/me");
+      setUser(data);
+    } catch {
+      setUser(null);
+    } finally {
+      setIsLoading(false);
+    }
   }
 
   async function login(email: string, password: string) {
     const { data } = await api.post("/auth/login", { email, password });
-    persistSession(data.token, data.user);
+    setUser(data.user);
   }
 
   async function register(username: string, email: string, password: string) {
     const { data } = await api.post("/auth/register", { username, email, password });
-    persistSession(data.token, data.user);
+    setUser(data.user);
   }
 
   async function loginWithGoogle(idToken: string) {
     const { data } = await api.post("/auth/google", { idToken });
-    persistSession(data.token, data.user);
+    setUser(data.user);
   }
 
-  function logout() {
-    localStorage.removeItem("@tech4um:token");
-    localStorage.removeItem("@tech4um:user");
-    setToken(null);
-    setUser(null);
+  async function logout() {
+    try {
+      await api.post("/auth/logout");
+    } finally {
+      setUser(null);
+    }
   }
 
   return (
     <AuthContext.Provider
-      value={{ user, token, isAuthenticated: !!token, login, register, loginWithGoogle, logout }}
+      value={{
+        user,
+        isAuthenticated: !!user,
+        isLoading,
+        login,
+        register,
+        loginWithGoogle,
+        logout,
+      }}
     >
       {children}
     </AuthContext.Provider>

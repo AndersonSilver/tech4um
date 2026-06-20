@@ -119,10 +119,21 @@ export function LoginModal({ onClose, onSuccess }: LoginModalProps) {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
-              minLength={6}
+              minLength={8}
+              pattern={mode === "register" ? "(?=.*[a-z])(?=.*[A-Z])(?=.*[0-9]).{8,}" : undefined}
+              title={
+                mode === "register"
+                  ? "Mínimo 8 caracteres, com letra maiúscula, minúscula e número"
+                  : undefined
+              }
               placeholder="••••••••"
               className="w-full py-[7px] font-roboto text-base text-primary-dark tracking-[0.15px] outline-none bg-transparent"
             />
+            {mode === "register" && (
+              <span className="font-roboto text-[11px] text-textgray px-1 pb-1">
+                Mín. 8 caracteres, com maiúscula, minúscula e número
+              </span>
+            )}
           </label>
 
           {error && <p className="text-secondary-default text-sm font-poppins">{error}</p>}
