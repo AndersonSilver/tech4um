@@ -1,8 +1,9 @@
 import { Request, Response, NextFunction } from "express";
 import { z } from "zod";
 import { ForumService } from "../services/ForumService";
+import type { CreateForumRequestDTO } from "@tech4um/shared";
 
-const createForumSchema = z.object({
+const createForumSchema: z.ZodType<CreateForumRequestDTO> = z.object({
   name: z.string().min(3).max(50),
   description: z.string().max(255).optional(),
 });

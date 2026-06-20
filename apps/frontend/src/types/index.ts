@@ -1,37 +1,10 @@
-export interface User {
-  id: string;
-  username: string;
-  email: string;
-  avatarUrl?: string;
-}
-
-export interface Forum {
-  id: string;
-  name: string;
-  description?: string;
-  ownerId: string;
-  owner?: User;
-  createdAt: string;
-  participants?: ForumParticipant[];
-}
-
-export interface ForumParticipant {
-  id: string;
-  userId: string;
-  isOnline: boolean;
-  user: User;
-}
-
-export type MessageType = "public" | "private";
-
-export interface Message {
-  id: string;
-  content: string;
-  type: MessageType;
-  senderId: string;
-  recipientId?: string;
-  forumId: string;
-  createdAt: string;
-  sender?: User;
-  recipient?: User;
-}
+// Os tipos de domínio agora vêm de @tech4um/shared (fonte única de verdade,
+// compartilhada com o backend). Mantemos os aliases abaixo para não precisar
+// reescrever todos os componentes que já usavam o nome `User`.
+export type {
+  PublicUser as User,
+  Forum,
+  ForumParticipant,
+  MessageType,
+  ChatMessage as Message,
+} from "@tech4um/shared";

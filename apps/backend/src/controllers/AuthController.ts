@@ -1,14 +1,15 @@
 import { Request, Response, NextFunction } from "express";
 import { z } from "zod";
 import { AuthService } from "../services/AuthService";
+import type { RegisterRequestDTO, LoginRequestDTO } from "@tech4um/shared";
 
-const registerSchema = z.object({
+const registerSchema: z.ZodType<RegisterRequestDTO> = z.object({
   username: z.string().min(3).max(30),
   email: z.string().email(),
   password: z.string().min(6),
 });
 
-const loginSchema = z.object({
+const loginSchema: z.ZodType<LoginRequestDTO> = z.object({
   email: z.string().email(),
   password: z.string().min(6),
 });

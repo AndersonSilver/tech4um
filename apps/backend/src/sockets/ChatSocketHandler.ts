@@ -1,4 +1,12 @@
 import { Server, Socket } from "socket.io";
+import {
+  SOCKET_EVENTS,
+  JoinForumPayload,
+  SendPublicMessagePayload,
+  SendPrivateMessagePayload,
+  TypingPayload,
+  LeaveForumPayload,
+} from "@tech4um/shared";
 import { TokenService } from "../utils/TokenService";
 import { ForumRepository } from "../repositories/ForumRepository";
 import { MessageService } from "../services/MessageService";
@@ -37,11 +45,19 @@ export class ChatSocketHandler {
   private handleConnection(socket: AuthenticatedSocket) {
     if (socket.userId) onlineUsers.set(socket.userId, socket.id);
 
-    socket.on("join_forum", async ({ forumId }) => this.onJoinForum(socket, forumId));
-    socket.on("send_public_message", (payload) => this.onPublicMessage(socket, payload));
-    socket.on("send_private_message", (payload) => this.onPrivateMessage(socket, payload));
-    socket.on("typing", ({ forumId }) => this.onTyping(socket, forumId));
-    socket.on("leave_forum", ({ forumId }) => this.onLeaveForum(socket, forumId));
+    socket.on(SOCKET_EVENTS.JOIN_FORUM, ({ forumId }: JoinForumPayload) =>
+      this.onJoinForum(socket, forumId)
+    );
+    socket.on(SOCKET_EVENTS.SEND_PUBLIC_MESSAGE, (payload: SendPublicMessagePayload) =>
+      this.onPublicMessage(socket, payload)
+    );
+    socket.on(SOCKET_EVENTS.SEND_PRIVATE_MESSAGE, (payload: SendPrivateMessagePayload) =>
+      this.onPrivateMessage(socket, payload)
+    );
+    socket.on(SOCKET_EVENTS.TYPING, ({ forumId }: TypingPayload) => this.onTyping(socket, forumId));
+    socket.on(SOCKET_EVENTS.LEAVE_FORUM, ({ forumId }: LeaveForumPayload) =>
+      this.onLeaveForum(socket, forumId)
+    );
     socket.on("disconnect", () => this.onDisconnect(socket));
   }
 
@@ -53,21 +69,21 @@ export class ChatSocketHandler {
 
     socket.join(forumId);
 
-    this.io.to(forumId).emit("participant_online", {
+    this.io.to(forumId).emit(SOCKET_EVENTS.PARTICIPANT_ONLINE, {
       userId: socket.userId,
       username: socket.username,
     });
 
-    this.io.to(forumId).emit("system_notice", {
+    this.io.to(forumId).emit(SOCKET_EVENTS.SYSTEM_NOTICE, {
       message: `${socket.username} entrou na sala`,
     });
 
-    socket.emit("forum_joined", { forumId });
+    socket.emit(SOCKET_EVENTS.FORUM_JOINED, { forumId });
   }
 
   private async onPublicMessage(
     socket: AuthenticatedSocket,
-    payload: { forumId: string; content: string }
+    payload: SendPublicMessagePayload
   ) {
     if (!socket.userId) return;
 
@@ -77,12 +93,12 @@ export class ChatSocketHandler {
       content: payload.content,
     });
 
-    this.io.to(payload.forumId).emit("new_public_message", { message });
+    this.io.to(payload.forumId).emit(SOCKET_EVENTS.NEW_PUBLIC_MESSAGE, { message });
   }
 
   private async onPrivateMessage(
     socket: AuthenticatedSocket,
-    payload: { forumId: string; recipientId: string; content: string }
+    payload: SendPrivateMessagePayload
   ) {
     if (!socket.userId) return;
 
@@ -94,24 +110,24 @@ export class ChatSocketHandler {
     });
 
     // Emite somente para o remetente e o destinatário
-    socket.emit("new_private_message", { message });
+    socket.emit(SOCKET_EVENTS.NEW_PRIVATE_MESSAGE, { message });
 
     const recipientSocketId = onlineUsers.get(payload.recipientId);
     if (recipientSocketId) {
-      this.io.to(recipientSocketId).emit("new_private_message", { message });
+      this.io.to(recipientSocketId).emit(SOCKET_EVENTS.NEW_PRIVATE_MESSAGE, { message });
     }
   }
 
   private onTyping(socket: AuthenticatedSocket, forumId: string) {
-    socket.to(forumId).emit("user_typing", { username: socket.username });
+    socket.to(forumId).emit(SOCKET_EVENTS.USER_TYPING, { username: socket.username });
   }
 
   private async onLeaveForum(socket: AuthenticatedSocket, forumId: string) {
     if (!socket.userId) return;
     socket.leave(forumId);
     await this.forumRepository.setOnlineStatus(forumId, socket.userId, false);
-    this.io.to(forumId).emit("participant_offline", { userId: socket.userId });
-    this.io.to(forumId).emit("system_notice", {
+    this.io.to(forumId).emit(SOCKET_EVENTS.PARTICIPANT_OFFLINE, { userId: socket.userId });
+    this.io.to(forumId).emit(SOCKET_EVENTS.SYSTEM_NOTICE, {
       message: `${socket.username} saiu da sala`,
     });
   }
@@ -123,8 +139,8 @@ export class ChatSocketHandler {
     socket.rooms.forEach((forumId) => {
       if (forumId === socket.id) return;
       this.forumRepository.setOnlineStatus(forumId, socket.userId!, false);
-      this.io.to(forumId).emit("participant_offline", { userId: socket.userId });
-      this.io.to(forumId).emit("system_notice", {
+      this.io.to(forumId).emit(SOCKET_EVENTS.PARTICIPANT_OFFLINE, { userId: socket.userId });
+      this.io.to(forumId).emit(SOCKET_EVENTS.SYSTEM_NOTICE, {
         message: `${socket.username} saiu da sala`,
       });
     });

@@ -7,6 +7,7 @@ import {
 } from "typeorm";
 import { Forum } from "./Forum";
 import { Message } from "./Message";
+import { PublicUser } from "@tech4um/shared";
 
 @Entity("users")
 export class User {
@@ -37,7 +38,7 @@ export class User {
   @OneToMany(() => Message, (message) => message.sender)
   sentMessages!: Message[];
 
-  toPublic() {
+  toPublic(): PublicUser {
     return {
       id: this.id,
       username: this.username,

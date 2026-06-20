@@ -13,6 +13,7 @@
     "migration:run": "typeorm-ts-node-commonjs migration:run -d src/config/data-source.ts"
   },
   "dependencies": {
+    "@tech4um/shared": "workspace:*",
     "express": "^4.19.2",
     "typeorm": "^0.3.20",
     "pg": "^8.12.0",

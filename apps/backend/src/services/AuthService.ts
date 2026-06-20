@@ -3,22 +3,12 @@ import { PasswordHasher } from "../utils/PasswordHasher";
 import { TokenService } from "../utils/TokenService";
 import { AppError } from "../utils/AppError";
 import { GoogleTokenVerifier } from "../utils/GoogleTokenVerifier";
-
-interface RegisterInput {
-  username: string;
-  email: string;
-  password: string;
-}
-
-interface LoginInput {
-  email: string;
-  password: string;
-}
+import type { RegisterRequestDTO, LoginRequestDTO, AuthResponseDTO } from "@tech4um/shared";
 
 export class AuthService {
   constructor(private userRepository: UserRepository = new UserRepository()) {}
 
-  async register(input: RegisterInput) {
+  async register(input: RegisterRequestDTO): Promise<AuthResponseDTO> {
     const existingEmail = await this.userRepository.findByEmail(input.email);
     if (existingEmail) throw new AppError("E-mail já cadastrado", 409);
 
@@ -38,7 +28,7 @@ export class AuthService {
     return { user: user.toPublic(), token };
   }
 
-  async login(input: LoginInput) {
+  async login(input: LoginRequestDTO): Promise<AuthResponseDTO> {
     const user = await this.userRepository.findByEmail(input.email);
     if (!user || !user.passwordHash) throw new AppError("Credenciais inválidas", 401);
 
@@ -50,7 +40,7 @@ export class AuthService {
     return { user: user.toPublic(), token };
   }
 
-  async loginWithGoogle(idToken: string) {
+  async loginWithGoogle(idToken: string): Promise<AuthResponseDTO> {
     const profile = await GoogleTokenVerifier.verify(idToken);
 
     let user = await this.userRepository.findByGoogleId(profile.googleId);

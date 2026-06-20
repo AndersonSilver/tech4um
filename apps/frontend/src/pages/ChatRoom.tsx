@@ -8,6 +8,7 @@ import { useAuth } from "../context/AuthContext";
 import { useSocket } from "../context/SocketContext";
 import { api } from "../services/api";
 import { Forum, ForumParticipant, Message } from "../types";
+import { SOCKET_EVENTS } from "@tech4um/shared";
 
 export function ChatRoom() {
   const { id } = useParams<{ id: string }>();
@@ -37,13 +38,13 @@ export function ChatRoom() {
   useEffect(() => {
     if (!socket || !id) return;
 
-    socket.emit("join_forum", { forumId: id });
+    socket.emit(SOCKET_EVENTS.JOIN_FORUM, { forumId: id });
 
-    socket.on("new_public_message", ({ message }: { message: Message }) => {
+    socket.on(SOCKET_EVENTS.NEW_PUBLIC_MESSAGE, ({ message }: { message: Message }) => {
       setMessages((prev) => [...prev, message]);
     });
 
-    socket.on("new_private_message", ({ message }: { message: Message }) => {
+    socket.on(SOCKET_EVENTS.NEW_PRIVATE_MESSAGE, ({ message }: { message: Message }) => {
       setMessages((prev) => [...prev, message]);
       if (message.senderId !== user?.id) {
         setHasNewPrivateMessage(true);
@@ -51,27 +52,27 @@ export function ChatRoom() {
       }
     });
 
-    socket.on("system_notice", ({ message }: { message: string }) => {
+    socket.on(SOCKET_EVENTS.SYSTEM_NOTICE, ({ message }: { message: string }) => {
       setSystemNotice(message);
       setTimeout(() => setSystemNotice(null), 3000);
     });
 
-    socket.on("user_typing", ({ username }: { username: string }) => {
+    socket.on(SOCKET_EVENTS.USER_TYPING, ({ username }: { username: string }) => {
       setTypingUser(username);
       setTimeout(() => setTypingUser(null), 2000);
     });
 
-    socket.on("participant_online", () => loadForum(id));
-    socket.on("participant_offline", () => loadForum(id));
+    socket.on(SOCKET_EVENTS.PARTICIPANT_ONLINE, () => loadForum(id));
+    socket.on(SOCKET_EVENTS.PARTICIPANT_OFFLINE, () => loadForum(id));
 
     return () => {
-      socket.emit("leave_forum", { forumId: id });
-      socket.off("new_public_message");
-      socket.off("new_private_message");
-      socket.off("user_typing");
-      socket.off("participant_online");
-      socket.off("participant_offline");
-      socket.off("system_notice");
+      socket.emit(SOCKET_EVENTS.LEAVE_FORUM, { forumId: id });
+      socket.off(SOCKET_EVENTS.NEW_PUBLIC_MESSAGE);
+      socket.off(SOCKET_EVENTS.NEW_PRIVATE_MESSAGE);
+      socket.off(SOCKET_EVENTS.USER_TYPING);
+      socket.off(SOCKET_EVENTS.PARTICIPANT_ONLINE);
+      socket.off(SOCKET_EVENTS.PARTICIPANT_OFFLINE);
+      socket.off(SOCKET_EVENTS.SYSTEM_NOTICE);
     };
   }, [socket, id]);
 
@@ -93,20 +94,20 @@ export function ChatRoom() {
     if (!content.trim() || !socket || !id) return;
 
     if (privateTarget) {
-      socket.emit("send_private_message", {
+      socket.emit(SOCKET_EVENTS.SEND_PRIVATE_MESSAGE, {
         forumId: id,
         recipientId: privateTarget.userId,
         content,
       });
     } else {
-      socket.emit("send_public_message", { forumId: id, content });
+      socket.emit(SOCKET_EVENTS.SEND_PUBLIC_MESSAGE, { forumId: id, content });
     }
     setContent("");
   }
 
   function handleTyping() {
     if (!socket || !id) return;
-    socket.emit("typing", { forumId: id });
+    socket.emit(SOCKET_EVENTS.TYPING, { forumId: id });
   }
 
   if (!forum) return null;
