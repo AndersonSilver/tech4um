@@ -1,14 +1,27 @@
+import { randomBytes, createHash } from "crypto";
 import { UserRepository } from "../repositories/UserRepository";
 import { PasswordHasher } from "../utils/PasswordHasher";
 import { TokenService } from "../utils/TokenService";
 import { AppError } from "../utils/AppError";
 import { GoogleTokenVerifier } from "../utils/GoogleTokenVerifier";
-import type { RegisterRequestDTO, LoginRequestDTO, AuthResponseDTO } from "@tech4um/shared";
+import { EmailService } from "./EmailService";
+import type {
+  RegisterRequestDTO,
+  LoginRequestDTO,
+  AuthResponseDTO,
+  LoginResponseDTO,
+} from "@tech4um/shared";
+
+const VERIFICATION_TOKEN_TTL_HOURS = 24;
+
+function hashToken(token: string): string {
+  return createHash("sha256").update(token).digest("hex");
+}
 
 export class AuthService {
   constructor(private userRepository: UserRepository = new UserRepository()) {}
 
-  async register(input: RegisterRequestDTO): Promise<AuthResponseDTO> {
+  async register(input: Omit<RegisterRequestDTO, "captchaToken">): Promise<AuthResponseDTO> {
     const existingEmail = await this.userRepository.findByEmail(input.email);
     if (existingEmail) {
       // Mensagem deliberadamente genérica: não confirma se o e-mail já existe,
@@ -31,20 +44,27 @@ export class AuthService {
       passwordHash,
     });
 
+    await this.sendVerificationEmail(user.id, user.email);
+
     const token = TokenService.sign({ sub: user.id, username: user.username });
 
     return { user: user.toPublic(), token };
   }
 
-  async login(input: LoginRequestDTO): Promise<AuthResponseDTO> {
+  async login(input: Omit<LoginRequestDTO, "captchaToken">): Promise<LoginResponseDTO> {
     const user = await this.userRepository.findByEmail(input.email);
     if (!user || !user.passwordHash) throw new AppError("Credenciais inválidas", 401);
 
     const passwordMatches = await PasswordHasher.compare(input.password, user.passwordHash);
     if (!passwordMatches) throw new AppError("Credenciais inválidas", 401);
 
-    const token = TokenService.sign({ sub: user.id, username: user.username });
+    if (user.mfaEnabled) {
+      // Não emite sessão ainda — o client precisa completar o segundo fator
+      // em POST /auth/mfa/verify usando este token de curta duração.
+      return { mfaRequired: true, mfaToken: TokenService.signMfaPending(user.id) };
+    }
 
+    const token = TokenService.sign({ sub: user.id, username: user.username });
     return { user: user.toPublic(), token };
   }
 
@@ -68,12 +88,52 @@ export class AuthService {
           email: profile.email,
           googleId: profile.googleId,
           avatarUrl: profile.avatarUrl,
+          // E-mail já é verificado pelo próprio Google — não precisa do nosso fluxo.
+          isEmailVerified: true,
         });
       }
     }
 
+    // Login via Google não passa pelo MFA: a posse da conta Google já é, em si,
+    // um segundo fator. (Decisão de produto documentada — times mais rígidos
+    // podem optar por exigir MFA aqui também.)
     const token = TokenService.sign({ sub: user.id, username: user.username });
     return { user: user.toPublic(), token };
+  }
+
+  // ---------- Verificação de e-mail ----------
+
+  async sendVerificationEmail(userId: string, email: string): Promise<void> {
+    const rawToken = randomBytes(32).toString("hex");
+    const tokenHash = hashToken(rawToken);
+    const expiresAt = new Date(Date.now() + VERIFICATION_TOKEN_TTL_HOURS * 60 * 60 * 1000);
+
+    await this.userRepository.setEmailVerificationToken(userId, tokenHash, expiresAt);
+
+    const baseUrl = process.env.FRONTEND_URL || "http://localhost:5173";
+    const verificationUrl = `${baseUrl}/verify-email?token=${rawToken}`;
+
+    await EmailService.sendVerificationEmail(email, verificationUrl);
+  }
+
+  async resendVerificationEmail(email: string): Promise<void> {
+    const user = await this.userRepository.findByEmail(email);
+    // Resposta idêntica exista ou não o e-mail — evita enumeração de contas
+    // também neste endpoint.
+    if (!user || user.isEmailVerified) return;
+
+    await this.sendVerificationEmail(user.id, user.email);
+  }
+
+  async verifyEmail(rawToken: string): Promise<void> {
+    const tokenHash = hashToken(rawToken);
+    const user = await this.userRepository.findByValidVerificationTokenHash(tokenHash);
+
+    if (!user) {
+      throw new AppError("Link de verificação inválido ou expirado.", 400);
+    }
+
+    await this.userRepository.markEmailVerified(user.id);
   }
 
   private async generateUniqueUsername(base: string): Promise<string> {

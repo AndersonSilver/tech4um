@@ -1,21 +1,47 @@
+import { redisClient } from "../config/redis";
+import { logger } from "./logger";
+
+const KEY_PREFIX = "tech4um:blacklist:";
+
 /**
- * Blacklist de tokens revogados (por `jti`), mantida em memória.
+ * Blacklist de tokens revogados (por `jti`), agora persistida no Redis —
+ * compartilhada entre todas as instâncias do backend (corrige a limitação
+ * da versão em memória, que não se propagava em deploys com múltiplas réplicas).
  *
- * LIMITAÇÃO CONHECIDA: por estar em memória, a blacklist é por instância do
- * processo — em um deploy com múltiplas réplicas, um logout em uma instância
- * não invalida o token nas outras. Para produção multi-instância, trocar por
- * um armazenamento compartilhado (ex.: Redis com TTL = tempo restante do token).
- * Documentado aqui propositalmente para não dar falsa sensação de segurança.
+ * A chave expira automaticamente (TTL) junto com o tempo de vida restante do
+ * token, então a blacklist nunca cresce indefinidamente.
  */
 class TokenBlacklist {
-  private revoked = new Set<string>();
-
-  revoke(jti: string) {
-    this.revoked.add(jti);
+  /**
+   * @param jti identificador único do token
+   * @param ttlSeconds tempo restante até a expiração natural do token —
+   *   depois disso o token já seria inválido por expiração mesmo sem blacklist,
+   *   então não há necessidade de manter a entrada além desse prazo.
+   */
+  async revoke(jti: string, ttlSeconds: number): Promise<void> {
+    try {
+      const safeTtl = Math.max(ttlSeconds, 1);
+      await redisClient.set(`${KEY_PREFIX}${jti}`, "1", "EX", safeTtl);
+    } catch (error) {
+      // Falha ao revogar não deve travar a requisição de logout do usuário,
+      // mas precisa ficar visível nos logs — é uma falha de segurança silenciosa.
+      logger.error("Falha ao revogar token no Redis", { jti, error: (error as Error).message });
+    }
   }
 
-  isRevoked(jti: string): boolean {
-    return this.revoked.has(jti);
+  async isRevoked(jti: string): Promise<boolean> {
+    try {
+      const result = await redisClient.exists(`${KEY_PREFIX}${jti}`);
+      return result === 1;
+    } catch (error) {
+      logger.error("Falha ao consultar blacklist no Redis", {
+        jti,
+        error: (error as Error).message,
+      });
+      // Fail-closed seria mais seguro, mas derrubaria toda a aplicação se o Redis
+      // cair. Optamos por fail-open com log de erro visível — trade-off documentado.
+      return false;
+    }
   }
 }
 

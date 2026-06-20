@@ -110,13 +110,46 @@ pnpm test
 
 ## Deploy
 
-Este projeto está pronto para deploy em qualquer provedor com suporte a Docker (Railway, Render, Fly.io) ou containers separados:
+Este projeto está pronto para deploy em qualquer provedor com suporte a Docker (Railway, Render, Fly.io) ou em uma VPS própria.
 
-- **Backend + Postgres:** Railway/Render — usar `apps/backend/Dockerfile`, configurando as variáveis de `.env.example` (incluindo `GOOGLE_CLIENT_ID`)
-- **Frontend:** Vercel/Netlify (build estático) ou `apps/frontend/Dockerfile` (Nginx) — configurar `VITE_API_URL`, `VITE_SOCKET_URL` e `VITE_GOOGLE_CLIENT_ID` apontando para a URL pública do backend
-- Lembre-se de adicionar a URL pública do frontend em **Authorized JavaScript origins** no Google Cloud Console
+### Deploy em VPS (ex.: Hostinger) com Docker Compose
 
-> Observação: o deploy efetivo (criar as contas/projetos nos provedores) precisa ser feito por vocês — aqui deixamos toda a configuração (Dockerfiles, compose, variáveis) pronta para isso.
+1. **Acesse a VPS via SSH** e instale Docker + Docker Compose (a Hostinger tem template de Ubuntu com Docker pré-instalado).
+2. **Clone o repositório** e entre na pasta.
+3. **Crie um arquivo `.env` na raiz** (lido automaticamente pelo `docker compose`) com os segredos reais:
+   ```bash
+   JWT_SECRET=$(openssl rand -hex 32)
+   ENCRYPTION_KEY=$(openssl rand -hex 32)
+   DB_PASSWORD=uma_senha_forte
+   CORS_ORIGIN=https://seudominio.com
+   FRONTEND_URL=https://seudominio.com
+   VITE_API_URL=https://api.seudominio.com/api
+   VITE_SOCKET_URL=https://api.seudominio.com
+   GOOGLE_CLIENT_ID=...
+   TURNSTILE_SECRET_KEY=...        # chave secreta do Cloudflare Turnstile
+   VITE_TURNSTILE_SITE_KEY=...     # chave pública (site key)
+   SMTP_HOST=smtp.hostinger.com
+   SMTP_PORT=465
+   SMTP_USER=no-reply@seudominio.com
+   SMTP_PASSWORD=...
+   SMTP_FROM=Tech4um <no-reply@seudominio.com>
+   ```
+4. **Suba tudo:**
+   ```bash
+   docker compose up -d --build
+   ```
+5. **Coloque um reverse proxy com HTTPS na frente** (Nginx Proxy Manager, Traefik ou Caddy) apontando seu domínio para as portas `5173` (frontend) e `3333` (backend). HTTPS é **obrigatório** — os cookies de sessão usam `Secure` em produção e só trafegam sob TLS.
+6. **Configure os serviços externos:**
+   - Google Cloud Console: adicione `https://seudominio.com` em *Authorized JavaScript origins*.
+   - Cloudflare Turnstile: adicione seu domínio na configuração do widget.
+   - E-mail: crie a caixa `no-reply@seudominio.com` no painel da Hostinger e use as credenciais SMTP dela.
+
+> **Importante sobre o banco:** em produção `synchronize` fica desligado. Rode as migrations com `docker compose exec backend npm run migration:run` (gere-as antes em dev com `npm run migration:generate`).
+
+### Deploy gerenciado (alternativa)
+- **Backend + Postgres + Redis:** Railway/Render usando `apps/backend/Dockerfile`.
+- **Frontend:** Vercel/Netlify (build estático) ou `apps/frontend/Dockerfile` (Nginx).
+
 
 ## Segurança
 
@@ -143,11 +176,16 @@ Após uma avaliação interna (simulando o que um pentest básico cobriria), os 
 - **Validação e rate limiting de mensagens no WebSocket** — conteúdo vazio/maior que 2000 caracteres é rejeitado; no máximo 20 mensagens por 10s por conexão.
 - **Mensagem privada agora valida que o destinatário realmente participa do fórum** antes de permitir o envio (evita enviar "mensagem privada" para qualquer `userId` arbitrário fora de contexto).
 
-### Limitações conhecidas (não implementadas — exigem infraestrutura externa)
-- **CAPTCHA/anti-bot** (ex.: hCaptcha, Cloudflare Turnstile) — o rate limiting reduz o risco, mas não substitui um CAPTCHA real contra automação distribuída.
-- **Verificação de e-mail no cadastro** — hoje qualquer e-mail é aceito sem confirmação; um fluxo completo exigiria infraestrutura de envio de e-mail (SMTP/SES).
-- **Blacklist de tokens em memória** — funciona para uma única instância do processo. Em deploy com múltiplas réplicas, um logout não se propaga entre instâncias; produção deveria usar um store compartilhado (Redis com TTL).
-- **MFA (autenticação em dois fatores)** — não implementado.
+### Implementado nesta rodada (antes listado como limitação)
+- **CAPTCHA anti-bot** — Cloudflare Turnstile no cadastro e login (widget no frontend, verificação do token via `siteverify` no backend). Escolhido por ser gratuito, self-hosted-friendly e não exigir conta Google.
+- **Verificação de e-mail** — no cadastro é enviado um link (token aleatório de 32 bytes, do qual guardamos apenas o hash SHA-256, com expiração de 24h) via SMTP/`nodemailer`. Criar fórum exige e-mail verificado. Há reenvio de link com resposta genérica anti-enumeração.
+- **Blacklist de tokens distribuída** — migrada de memória para **Redis** com TTL igual ao tempo restante do token. Um logout agora se propaga entre todas as instâncias do backend.
+- **MFA (2FA via TOTP)** — compatível com Google Authenticator/Authy/1Password. O segredo é criptografado em repouso (AES-256-GCM via `ENCRYPTION_KEY`), o setup exige confirmação de um código válido antes de ativar, e o login passa a ter uma segunda etapa (`/auth/mfa/verify`) com token intermediário de 5 min.
+
+### Limitações que permanecem
+- **Recovery codes de MFA** — hoje, se o usuário perder o dispositivo autenticador, a recuperação precisa ser manual (suporte). Um conjunto de códigos de backup seria o próximo passo.
+- **Verificação de e-mail não é obrigatória para login** — apenas para ações sensíveis (criar fórum). Decisão de produto para não travar o acesso por um e-mail que pode não ter chegado.
+- **WAF / proteção de borda** — fica a cargo da infraestrutura (ex.: Cloudflare na frente do VPS).
 
 ## Autenticação
 

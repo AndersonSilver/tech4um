@@ -1,6 +1,7 @@
-import { useState, FormEvent } from "react";
+import { useState, useRef, FormEvent } from "react";
 import { useAuth } from "../context/AuthContext";
 import { GoogleLoginButton } from "./GoogleLoginButton";
+import { TurnstileWidget, TurnstileHandle } from "./TurnstileWidget";
 
 interface LoginModalProps {
   onClose: () => void;
@@ -10,35 +11,119 @@ interface LoginModalProps {
 type Mode = "login" | "register";
 
 export function LoginModal({ onClose, onSuccess }: LoginModalProps) {
-  const { login, register } = useAuth();
+  const { login, register, verifyMfa } = useAuth();
   const [mode, setMode] = useState<Mode>("login");
 
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [captchaToken, setCaptchaToken] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+
+  // Segunda etapa (MFA), exibida só se a conta tiver MFA habilitado
+  const [mfaToken, setMfaToken] = useState<string | null>(null);
+  const [mfaCode, setMfaCode] = useState("");
+
+  const turnstileRef = useRef<TurnstileHandle>(null);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setError("");
+
+    if (!captchaToken) {
+      setError("Confirme que você não é um robô.");
+      return;
+    }
+
     setLoading(true);
     try {
       if (mode === "login") {
-        await login(email, password);
+        const result = await login(email, password, captchaToken);
+        if (result.mfaRequired) {
+          setMfaToken(result.mfaToken);
+        } else {
+          onSuccess();
+        }
       } else {
-        await register(username, email, password);
+        await register(username, email, password, captchaToken);
+        onSuccess();
       }
-      onSuccess();
-    } catch {
+    } catch (err: any) {
       setError(
-        mode === "login"
-          ? "Não foi possível entrar. Verifique e-mail e senha."
-          : "Não foi possível cadastrar. Verifique os dados informados."
+        err?.response?.data?.message ||
+          (mode === "login"
+            ? "Não foi possível entrar. Verifique e-mail e senha."
+            : "Não foi possível cadastrar. Verifique os dados informados.")
       );
+      turnstileRef.current?.reset();
+      setCaptchaToken("");
     } finally {
       setLoading(false);
     }
+  }
+
+  async function handleVerifyMfa(e: FormEvent) {
+    e.preventDefault();
+    if (!mfaToken) return;
+
+    setError("");
+    setLoading(true);
+    try {
+      await verifyMfa(mfaToken, mfaCode);
+      onSuccess();
+    } catch {
+      setError("Código de verificação inválido.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  if (mfaToken) {
+    return (
+      <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+        <form
+          onSubmit={handleVerifyMfa}
+          className="bg-white flex flex-col gap-6 items-start p-10 rounded-2xl w-[398px]"
+        >
+          <p className="font-poppins font-bold text-primary-default text-[22px] m-0">
+            Verificação em duas etapas
+          </p>
+          <p className="font-poppins text-sm text-textgray m-0">
+            Digite o código de 6 dígitos do seu app autenticador.
+          </p>
+
+          <input
+            value={mfaCode}
+            onChange={(e) => setMfaCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+            placeholder="000000"
+            maxLength={6}
+            autoFocus
+            className="w-full text-center text-2xl tracking-widest font-roboto border border-background rounded py-3 outline-none"
+          />
+
+          {error && <p className="text-secondary-default text-sm font-poppins">{error}</p>}
+
+          <button
+            type="submit"
+            disabled={loading || mfaCode.length !== 6}
+            className="bg-primary-dark h-11 flex items-center justify-center px-4 rounded-button w-full disabled:opacity-60"
+          >
+            <span className="font-poppins font-semibold text-base text-background">
+              {loading ? "Verificando..." : "Confirmar"}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setMfaToken(null)}
+            className="text-textgray text-xs font-poppins self-center hover:text-primary-dark"
+          >
+            Voltar
+          </button>
+        </form>
+      </div>
+    );
   }
 
   return (
@@ -135,6 +220,8 @@ export function LoginModal({ onClose, onSuccess }: LoginModalProps) {
               </span>
             )}
           </label>
+
+          <TurnstileWidget ref={turnstileRef} onVerify={setCaptchaToken} />
 
           {error && <p className="text-secondary-default text-sm font-poppins">{error}</p>}
 

@@ -2,12 +2,18 @@ import { AuthService } from "../services/AuthService";
 import { UserRepository } from "../repositories/UserRepository";
 import { User } from "../entities/User";
 
+jest.mock("../services/EmailService", () => ({
+  EmailService: { sendVerificationEmail: jest.fn().mockResolvedValue(undefined) },
+}));
+
 function buildFakeUser(overrides: Partial<User> = {}): User {
   const user = new User();
   user.id = "user-1";
   user.username = "lara";
   user.email = "lara@email.com";
   user.passwordHash = "$2b$10$hashedpasswordvalue1234567890123456789012";
+  user.mfaEnabled = false;
+  user.isEmailVerified = false;
   Object.assign(user, overrides);
   return user;
 }
@@ -21,6 +27,9 @@ describe("AuthService", () => {
       findByGoogleId: jest.fn(),
       linkGoogleAccount: jest.fn(),
       create: jest.fn(),
+      setEmailVerificationToken: jest.fn().mockResolvedValue(undefined),
+      findByValidVerificationTokenHash: jest.fn(),
+      markEmailVerified: jest.fn().mockResolvedValue(undefined),
       ...overrides,
     } as unknown as UserRepository;
 

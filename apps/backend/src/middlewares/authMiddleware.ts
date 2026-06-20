@@ -16,22 +16,23 @@ function extractToken(req: Request): string | null {
   return null;
 }
 
-export function authMiddleware(req: Request, _res: Response, next: NextFunction) {
-  const token = extractToken(req);
-  if (!token) throw new AppError("Token não fornecido", 401);
-
+export async function authMiddleware(req: Request, _res: Response, next: NextFunction) {
   try {
+    const token = extractToken(req);
+    if (!token) throw new AppError("Token não fornecido", 401);
+
     const payload = TokenService.verify(token);
 
-    if (tokenBlacklist.isRevoked(payload.jti)) {
+    if (await tokenBlacklist.isRevoked(payload.jti)) {
       throw new AppError("Sessão expirada. Faça login novamente.", 401);
     }
 
     (req as any).userId = payload.sub;
     (req as any).tokenJti = payload.jti;
+    (req as any).tokenExp = payload.exp;
     next();
   } catch (error) {
-    if (error instanceof AppError) throw error;
-    throw new AppError("Token inválido ou expirado", 401);
+    if (error instanceof AppError) return next(error);
+    next(new AppError("Token inválido ou expirado", 401));
   }
 }

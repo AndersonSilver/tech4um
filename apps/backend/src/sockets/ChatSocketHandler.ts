@@ -67,13 +67,13 @@ export class ChatSocketHandler {
     return cookies[AUTH_COOKIE_NAME] ?? null;
   }
 
-  private authenticate = (socket: AuthenticatedSocket, next: (err?: Error) => void) => {
+  private authenticate = async (socket: AuthenticatedSocket, next: (err?: Error) => void) => {
     try {
       const token = this.extractTokenFromHandshake(socket);
       if (!token) return next(new Error("Token não fornecido"));
 
       const payload = TokenService.verify(token);
-      if (tokenBlacklist.isRevoked(payload.jti)) {
+      if (await tokenBlacklist.isRevoked(payload.jti)) {
         return next(new Error("Sessão revogada"));
       }
 
@@ -114,10 +114,10 @@ export class ChatSocketHandler {
     });
   }
 
-  private revalidateSession(socket: AuthenticatedSocket) {
+  private async revalidateSession(socket: AuthenticatedSocket) {
     if (!socket.tokenJti) return;
 
-    if (tokenBlacklist.isRevoked(socket.tokenJti)) {
+    if (await tokenBlacklist.isRevoked(socket.tokenJti)) {
       socket.emit(SOCKET_EVENTS.SYSTEM_NOTICE, {
         message: "Sua sessão foi encerrada. Faça login novamente.",
       });

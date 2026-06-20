@@ -47,6 +47,13 @@ export function Header({ onLoginClick }: HeaderProps) {
             )}
           </div>
           <button
+            onClick={() => navigate("/settings")}
+            title="Configurações de segurança"
+            className="font-poppins text-xs text-textgray hover:text-primary-dark transition-colors mb-3"
+          >
+            Configurações
+          </button>
+          <button
             onClick={handleLogout}
             title="Sair"
             className="font-poppins text-xs text-textgray hover:text-secondary-default transition-colors mb-3"

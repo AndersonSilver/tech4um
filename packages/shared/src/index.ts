@@ -7,6 +7,8 @@ export interface PublicUser {
   username: string;
   email: string;
   avatarUrl?: string;
+  isEmailVerified: boolean;
+  mfaEnabled: boolean;
 }
 
 export interface Forum {
@@ -46,11 +48,13 @@ export interface RegisterRequestDTO {
   username: string;
   email: string;
   password: string;
+  captchaToken: string;
 }
 
 export interface LoginRequestDTO {
   email: string;
   password: string;
+  captchaToken: string;
 }
 
 export interface GoogleLoginRequestDTO {
@@ -64,6 +68,41 @@ export interface CreateForumRequestDTO {
 
 export interface AuthResponseDTO {
   user: PublicUser;
+  token: string;
+}
+
+// Resposta de login quando MFA está habilitado: nenhuma sessão é criada ainda,
+// o client precisa completar o segundo fator em /auth/mfa/verify.
+export interface MfaRequiredResponseDTO {
+  mfaRequired: true;
+  mfaToken: string;
+}
+
+export type LoginResponseDTO = AuthResponseDTO | MfaRequiredResponseDTO;
+
+export interface VerifyMfaRequestDTO {
+  mfaToken: string;
+  code: string;
+}
+
+export interface MfaSetupResponseDTO {
+  qrCodeDataUrl: string;
+  secret: string;
+}
+
+export interface EnableMfaRequestDTO {
+  code: string;
+}
+
+export interface DisableMfaRequestDTO {
+  code: string;
+}
+
+export interface ResendVerificationRequestDTO {
+  email: string;
+}
+
+export interface VerifyEmailRequestDTO {
   token: string;
 }
 

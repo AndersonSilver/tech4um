@@ -10,7 +10,7 @@ const forum: Forum = {
   ownerId: "owner-1",
   createdAt: new Date().toISOString(),
   participants: [
-    { id: "p1", userId: "u1", isOnline: true, user: { id: "u1", username: "Lara", email: "lara@email.com" } },
+    { id: "p1", userId: "u1", isOnline: true, user: { id: "u1", username: "Lara", email: "lara@email.com", isEmailVerified: true, mfaEnabled: false } },
   ],
 };
 

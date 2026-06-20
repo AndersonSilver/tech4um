@@ -17,21 +17,33 @@ import { logger } from "./utils/logger";
 dotenv.config();
 
 function assertRequiredEnv() {
-  const required = ["JWT_SECRET", "DB_HOST", "DB_USER", "DB_PASSWORD", "DB_NAME"];
+  const required = ["JWT_SECRET", "DB_HOST", "DB_USER", "DB_PASSWORD", "DB_NAME", "ENCRYPTION_KEY"];
   const missing = required.filter((key) => !process.env[key]);
 
   if (missing.length > 0) {
     throw new Error(`Variáveis de ambiente obrigatórias ausentes: ${missing.join(", ")}`);
   }
 
-  if (process.env.NODE_ENV === "production" && !process.env.CORS_ORIGIN) {
-    // Em produção, NUNCA aceitar CORS aberto (`*`) por padrão — é obrigatório
-    // declarar explicitamente o(s) domínio(s) do frontend.
-    throw new Error("CORS_ORIGIN é obrigatório em produção (não usar wildcard '*').");
+  if (process.env.NODE_ENV === "production") {
+    if (!process.env.CORS_ORIGIN) {
+      // Em produção, NUNCA aceitar CORS aberto (`*`) por padrão — é obrigatório
+      // declarar explicitamente o(s) domínio(s) do frontend.
+      throw new Error("CORS_ORIGIN é obrigatório em produção (não usar wildcard '*').");
+    }
+    if (!process.env.TURNSTILE_SECRET_KEY) {
+      throw new Error("TURNSTILE_SECRET_KEY é obrigatório em produção (proteção de CAPTCHA).");
+    }
+    if (!process.env.SMTP_HOST) {
+      throw new Error("SMTP_HOST é obrigatório em produção (envio de e-mail de verificação).");
+    }
   }
 
   if (process.env.JWT_SECRET && process.env.JWT_SECRET.length < 16) {
     throw new Error("JWT_SECRET muito curto — use no mínimo 16 caracteres aleatórios.");
+  }
+
+  if (process.env.ENCRYPTION_KEY && process.env.ENCRYPTION_KEY.length < 16) {
+    throw new Error("ENCRYPTION_KEY muito curto — use no mínimo 16 caracteres aleatórios.");
   }
 }
 

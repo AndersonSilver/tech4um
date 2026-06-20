@@ -2,14 +2,23 @@ import { createContext, useContext, useState, useEffect, ReactNode } from "react
 import { api } from "../services/api";
 import { User } from "../types";
 
+type LoginResult = { mfaRequired: true; mfaToken: string } | { mfaRequired: false };
+
 interface AuthContextData {
   user: User | null;
   isAuthenticated: boolean;
   isLoading: boolean;
-  login: (email: string, password: string) => Promise<void>;
-  register: (username: string, email: string, password: string) => Promise<void>;
+  login: (email: string, password: string, captchaToken: string) => Promise<LoginResult>;
+  register: (
+    username: string,
+    email: string,
+    password: string,
+    captchaToken: string
+  ) => Promise<void>;
   loginWithGoogle: (idToken: string) => Promise<void>;
+  verifyMfa: (mfaToken: string, code: string) => Promise<void>;
   logout: () => Promise<void>;
+  refreshUser: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextData>({} as AuthContextData);
@@ -36,13 +45,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }
 
-  async function login(email: string, password: string) {
-    const { data } = await api.post("/auth/login", { email, password });
+  async function refreshUser() {
+    await restoreSession();
+  }
+
+  async function login(email: string, password: string, captchaToken: string): Promise<LoginResult> {
+    const { data } = await api.post("/auth/login", { email, password, captchaToken });
+
+    if (data.mfaRequired) {
+      return { mfaRequired: true, mfaToken: data.mfaToken };
+    }
+
+    setUser(data.user);
+    return { mfaRequired: false };
+  }
+
+  async function verifyMfa(mfaToken: string, code: string) {
+    const { data } = await api.post("/auth/mfa/verify", { mfaToken, code });
     setUser(data.user);
   }
 
-  async function register(username: string, email: string, password: string) {
-    const { data } = await api.post("/auth/register", { username, email, password });
+  async function register(
+    username: string,
+    email: string,
+    password: string,
+    captchaToken: string
+  ) {
+    const { data } = await api.post("/auth/register", { username, email, password, captchaToken });
     setUser(data.user);
   }
 
@@ -68,7 +97,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         login,
         register,
         loginWithGoogle,
+        verifyMfa,
         logout,
+        refreshUser,
       }}
     >
       {children}

@@ -29,6 +29,26 @@ export class User {
   @Column({ name: "avatar_url", nullable: true })
   avatarUrl?: string;
 
+  // ---------- Verificação de e-mail ----------
+  @Column({ name: "is_email_verified", default: false })
+  isEmailVerified!: boolean;
+
+  // Armazenamos apenas o HASH do token de verificação (nunca o token em si),
+  // mesma lógica de "nunca guardar segredo em texto puro" usada para senhas.
+  @Column({ name: "email_verification_token_hash", nullable: true })
+  emailVerificationTokenHash?: string;
+
+  @Column({ name: "email_verification_expires_at", type: "timestamp", nullable: true })
+  emailVerificationExpiresAt?: Date;
+
+  // ---------- MFA (TOTP) ----------
+  @Column({ name: "mfa_enabled", default: false })
+  mfaEnabled!: boolean;
+
+  // Segredo TOTP criptografado em repouso (AES-256-GCM) — nunca fica em texto puro no banco.
+  @Column({ name: "mfa_secret_encrypted", nullable: true })
+  mfaSecretEncrypted?: string;
+
   @CreateDateColumn({ name: "created_at" })
   createdAt!: Date;
 
@@ -44,6 +64,8 @@ export class User {
       username: this.username,
       email: this.email,
       avatarUrl: this.avatarUrl,
+      isEmailVerified: this.isEmailVerified,
+      mfaEnabled: this.mfaEnabled,
     };
   }
 }
