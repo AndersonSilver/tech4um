@@ -5,10 +5,14 @@ Guia para rodar o Tech4um **ao lado de outras apps** na mesma VPS, com CI/CD aut
 ## Arquitetura
 
 ```
-Internet → Nginx (host, :443) → localhost:8173 (frontend Docker)
-                              → localhost:8174 (backend Docker + WebSocket)
+Internet → NPM (host, :443) → 172.17.0.1:8173 (frontend Docker)
+                                    ├─ /        → React estático
+                                    ├─ /api     → proxy interno → backend:3333
+                                    └─ /socket.io → proxy interno → backend:3333
          Postgres/Redis só na rede interna Docker (tech4um_internal)
 ```
+
+O frontend Docker faz proxy de `/api` e `/socket.io` para o backend — **no NPM basta um Proxy Host** (sem Custom Locations).
 
 Portas **8173/8174** são padrão — não conflitam com 80, 443, 5432, 6379 etc.
 
@@ -85,12 +89,16 @@ curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:8173/
 
 ### 1.6 Nginx + HTTPS no host
 
-Se já usa **Nginx Proxy Manager** ou **Traefik** para outras apps, crie um host apontando:
+Se já usa **Nginx Proxy Manager** para outras apps, crie **um** Proxy Host:
 
-| Destino | Porta |
-|---------|-------|
-| Frontend | `127.0.0.1:8173` |
-| `/api` e `/socket.io` | `127.0.0.1:8174` (WebSocket habilitado) |
+| Campo | Valor |
+|-------|--------|
+| Domain | `tech4um.seudominio.com` |
+| Forward | `172.17.0.1:8173` |
+| Websockets Support | ✅ ligado |
+| Custom Locations | **nenhuma** (o frontend repassa `/api` e `/socket.io`) |
+
+SSL: **Certificates** → Let's Encrypt via HTTP → associar no host → Force SSL.
 
 Com Nginx nativo:
 
