@@ -29,62 +29,113 @@ tech4um/
 
 > `packages/shared` evita duplicar interfaces (`User`, `Forum`, `Message`, eventos de socket) entre backend e frontend — qualquer mudança no contrato de dados é feita em um único lugar.
 
-## Como rodar com Docker (recomendado)
+## Desenvolvimento local (recomendado)
 
-```bash
-GOOGLE_CLIENT_ID=seu_client_id.apps.googleusercontent.com docker compose up --build
-```
-- Frontend: http://localhost:5173
-- Backend: http://localhost:3333
-- Postgres: localhost:5432 (usuário/senha `postgres`)
+Fluxo híbrido profissional: **Postgres + Redis no Docker** (dados persistentes) e **app local** com hot reload.
 
-## Como rodar localmente sem Docker
+### Pré-requisitos
 
-### 1. Pré-requisitos
 - Node.js 20+
 - pnpm (`npm i -g pnpm`)
-- PostgreSQL rodando localmente (ou via Docker)
+- Docker + Docker Compose
 
-### 2. Instalar dependências
+### 1. Instalar dependências
+
 ```bash
 pnpm install
 ```
 
-### 3. Buildar o pacote compartilhado (necessário antes do primeiro dev/build)
-```bash
-pnpm --filter @tech4um/shared build
-```
-> O Turborepo já orquestra essa dependência automaticamente quando você roda `pnpm dev` ou `pnpm build` na raiz — este passo manual só é necessário se for rodar `apps/backend` ou `apps/frontend` isoladamente antes de qualquer build orquestrado.
+### 2. Configurar variáveis de ambiente
 
-### 4. Configurar variáveis de ambiente
 ```bash
+cp .env.example .env
 cp apps/backend/.env.example apps/backend/.env
 cp apps/frontend/.env.example apps/frontend/.env
 ```
-Ajuste as credenciais do banco em `apps/backend/.env`.
 
-#### Login com Google
+Preencha `apps/backend/.env` e `apps/frontend/.env` (Google OAuth, reCAPTCHA, SMTP etc.).
+
+> `DB_PASSWORD` e `REDIS_PASSWORD` na raiz (`.env`) devem bater com `apps/backend/.env`.
+
+### 3. Subir tudo com um comando
+
+```bash
+pnpm dev
+```
+
+Isso executa, nesta ordem:
+
+1. **Postgres** em `localhost:5433` (volume `tech4um_postgres_data`)
+2. **Redis** em `localhost:6379` (com senha; volume `tech4um_redis_data`)
+3. **Frontend** em http://localhost:5173
+4. **Backend** em http://localhost:3333
+
+O TypeORM cria as tabelas automaticamente em desenvolvimento (`synchronize: true`).
+
+Na **primeira execução** com banco vazio, o backend cria automaticamente **15 salas de tecnologia** e um usuário demo (sem precisar de login prévio). O dashboard já abre populado.
+
+Para **entrar no chat** de uma sala, faça login com a conta demo (ou cadastre a sua):
+
+| Campo | Valor |
+|-------|-------|
+| E-mail | `demo@tech4um.local` |
+| Senha | `Demo1234!` |
+
+> Listar salas no dashboard é público; login só é exigido para entrar no chat, enviar mensagens ou criar fórum.
+
+Desative o seed automático com `SEED_DEMO_DATA=false` em `apps/backend/.env`.
+
+### Comandos úteis
+
+| Comando | Descrição |
+|---------|-----------|
+| `pnpm dev` | Infra Docker + app |
+| `pnpm dev:app` | Só frontend/backend (infra já rodando) |
+| `pnpm dev:infra` | Só Postgres + Redis |
+| `pnpm dev:infra:down` | Para Postgres + Redis |
+| `pnpm seed` | Recria 15 salas de tecnologia (apaga salas existentes; útil após testes) |
+| `pnpm db:shell` | Abre `psql` no Postgres do container |
+| `pnpm db:logs` | Logs de Postgres e Redis |
+
+> **Persistência:** nunca rode `docker compose down -v` — o flag `-v` **apaga** os volumes e todo o banco.
+
+### Login com Google
+
 1. Crie um OAuth Client ID (tipo "Web application") em https://console.cloud.google.com/apis/credentials
 2. Adicione `http://localhost:5173` em "Authorized JavaScript origins"
 3. Copie o Client ID para `GOOGLE_CLIENT_ID` (backend) e `VITE_GOOGLE_CLIENT_ID` (frontend)
 
-### 5. Criar o banco de dados
+## Stack completa com Docker (produção / demo)
+
 ```bash
+# .env na raiz com JWT_SECRET, ENCRYPTION_KEY, DB_PASSWORD, REDIS_PASSWORD, etc.
+docker compose up -d --build
+```
+
+- Frontend: http://localhost:5173
+- Backend: http://localhost:3333
+- Postgres e Redis **sem portas expostas** na rede interna do compose
+
+## Como rodar localmente sem Docker (legado)
+
+<details>
+<summary>Clique para expandir — não recomendado para o time</summary>
+
+### Pré-requisitos adicionais
+
+- PostgreSQL e Redis instalados na máquina
+
+### Passos
+
+```bash
+pnpm install
+cp apps/backend/.env.example apps/backend/.env
+cp apps/frontend/.env.example apps/frontend/.env
 createdb tech4um
+pnpm dev:app
 ```
-(o TypeORM com `synchronize: true` cria as tabelas automaticamente em desenvolvimento)
 
-### 6. Rodar tudo em paralelo (Turborepo)
-```bash
-pnpm dev
-```
-Isso executa `dev` no backend (`http://localhost:3333`) e no frontend (`http://localhost:5173`) simultaneamente, com cache e orquestração do Turborepo.
-
-### Rodar individualmente
-```bash
-pnpm --filter @tech4um/backend dev
-pnpm --filter @tech4um/frontend dev
-```
+</details>
 
 ## Build de produção
 ```bash
@@ -98,10 +149,10 @@ O frontend foi implementado a partir do protótipo oficial no Figma, extraindo c
 ## Testes automatizados
 
 ```bash
-# Backend (Jest) — AuthService, hashing de senha, regras de visibilidade de mensagens
+# Backend (Jest) — controllers, services, utils
 pnpm --filter @tech4um/backend test
 
-# Frontend (Vitest) — ForumCard, MessageBubble
+# Frontend (Vitest) — componentes e utils
 pnpm --filter @tech4um/frontend test
 
 # Ou os dois em paralelo via Turborepo
@@ -110,41 +161,17 @@ pnpm test
 
 ## Deploy
 
-Este projeto está pronto para deploy em qualquer provedor com suporte a Docker (Railway, Render, Fly.io) ou em uma VPS própria.
+Stack de produção isolada (`docker-compose.prod.yml`) + CI/CD via GitHub Actions.
 
-### Deploy em VPS (ex.: Hostinger) com Docker Compose
+**Guia completo:** [deploy/HOSTINGER.md](deploy/HOSTINGER.md)
 
-1. **Acesse a VPS via SSH** e instale Docker + Docker Compose (a Hostinger tem template de Ubuntu com Docker pré-instalado).
-2. **Clone o repositório** e entre na pasta.
-3. **Crie um arquivo `.env` na raiz** (lido automaticamente pelo `docker compose`) com os segredos reais:
-   ```bash
-   JWT_SECRET=$(openssl rand -hex 32)
-   ENCRYPTION_KEY=$(openssl rand -hex 32)
-   DB_PASSWORD=uma_senha_forte
-   CORS_ORIGIN=https://seudominio.com
-   FRONTEND_URL=https://seudominio.com
-   VITE_API_URL=https://api.seudominio.com/api
-   VITE_SOCKET_URL=https://api.seudominio.com
-   GOOGLE_CLIENT_ID=...
-   TURNSTILE_SECRET_KEY=...        # chave secreta do Cloudflare Turnstile
-   VITE_TURNSTILE_SITE_KEY=...     # chave pública (site key)
-   SMTP_HOST=smtp.hostinger.com
-   SMTP_PORT=465
-   SMTP_USER=no-reply@seudominio.com
-   SMTP_PASSWORD=...
-   SMTP_FROM=Tech4um <no-reply@seudominio.com>
-   ```
-4. **Suba tudo:**
-   ```bash
-   docker compose up -d --build
-   ```
-5. **Coloque um reverse proxy com HTTPS na frente** (Nginx Proxy Manager, Traefik ou Caddy) apontando seu domínio para as portas `5173` (frontend) e `3333` (backend). HTTPS é **obrigatório** — os cookies de sessão usam `Secure` em produção e só trafegam sob TLS.
-6. **Configure os serviços externos:**
-   - Google Cloud Console: adicione `https://seudominio.com` em *Authorized JavaScript origins*.
-   - Cloudflare Turnstile: adicione seu domínio na configuração do widget.
-   - E-mail: crie a caixa `no-reply@seudominio.com` no painel da Hostinger e use as credenciais SMTP dela.
+### Resumo rápido
 
-> **Importante sobre o banco:** em produção `synchronize` fica desligado. Rode as migrations com `docker compose exec backend npm run migration:run` (gere-as antes em dev com `npm run migration:generate`).
+1. Na VPS: clone em `/opt/tech4um`, copie `.env.production.example` → `.env`
+2. `./deploy/remote-deploy.sh` (primeiro deploy manual)
+3. Nginx no host → `127.0.0.1:8173` (front) e `8174` (API + WebSocket)
+4. GitHub Secrets: `VPS_HOST`, `VPS_USER`, `VPS_SSH_KEY`
+5. Push na `main` → CI passa → deploy automático
 
 ### Deploy gerenciado (alternativa)
 - **Backend + Postgres + Redis:** Railway/Render usando `apps/backend/Dockerfile`.
@@ -177,7 +204,7 @@ Após uma avaliação interna (simulando o que um pentest básico cobriria), os 
 - **Mensagem privada agora valida que o destinatário realmente participa do fórum** antes de permitir o envio (evita enviar "mensagem privada" para qualquer `userId` arbitrário fora de contexto).
 
 ### Implementado nesta rodada (antes listado como limitação)
-- **CAPTCHA anti-bot** — Cloudflare Turnstile no cadastro e login (widget no frontend, verificação do token via `siteverify` no backend). Escolhido por ser gratuito, self-hosted-friendly e não exigir conta Google.
+- **CAPTCHA anti-bot** — Google reCAPTCHA v3 no cadastro e login (token invisível no frontend, verificação via `siteverify` no backend).
 - **Verificação de e-mail** — no cadastro é enviado um link (token aleatório de 32 bytes, do qual guardamos apenas o hash SHA-256, com expiração de 24h) via SMTP/`nodemailer`. Criar fórum exige e-mail verificado. Há reenvio de link com resposta genérica anti-enumeração.
 - **Blacklist de tokens distribuída** — migrada de memória para **Redis** com TTL igual ao tempo restante do token. Um logout agora se propaga entre todas as instâncias do backend.
 - **MFA (2FA via TOTP)** — compatível com Google Authenticator/Authy/1Password. O segredo é criptografado em repouso (AES-256-GCM via `ENCRYPTION_KEY`), o setup exige confirmação de um código válido antes de ativar, e o login passa a ter uma segunda etapa (`/auth/mfa/verify`) com token intermediário de 5 min.

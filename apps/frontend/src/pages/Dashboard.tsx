@@ -4,23 +4,71 @@ import { Header } from "../components/Header";
 import { LoginModal } from "../components/LoginModal";
 import { CreateForumModal } from "../components/CreateForumModal";
 import { ForumCard } from "../components/ForumCard";
+import { ForumSortToggle } from "../components/ForumSortToggle";
+import { SearchBar } from "../components/SearchBar";
 import { useAuth } from "../context/AuthContext";
+import { useSocket } from "../context/SocketContext";
 import { api } from "../services/api";
 import { Forum } from "../types";
+import { ForumSortMode, sortForums } from "../utils/forumMetrics";
+import { SOCKET_EVENTS } from "@tech4um/shared";
+
+type CardSize = "extra-large" | "large" | "medium" | "small";
+
+interface CardLayout {
+  size: CardSize;
+  featured: boolean;
+  colSpan: string;
+}
+
+const CARD_LAYOUT_PATTERN: CardLayout[] = [
+  { size: "extra-large", featured: true, colSpan: "col-span-1 xl:col-span-2" },
+  { size: "medium", featured: false, colSpan: "col-span-1" },
+  { size: "medium", featured: false, colSpan: "col-span-1" },
+  { size: "large", featured: true, colSpan: "col-span-1 xl:col-span-2" },
+  { size: "small", featured: false, colSpan: "col-span-1" },
+  { size: "medium", featured: false, colSpan: "col-span-1" },
+  { size: "small", featured: false, colSpan: "col-span-1" },
+];
+
+const FORUM_REFRESH_MS = 20_000;
+
+function getCardLayout(index: number): CardLayout {
+  return CARD_LAYOUT_PATTERN[index % CARD_LAYOUT_PATTERN.length];
+}
 
 export function Dashboard() {
   const { isAuthenticated } = useAuth();
+  const socket = useSocket();
   const navigate = useNavigate();
 
   const [forums, setForums] = useState<Forum[]>([]);
   const [search, setSearch] = useState("");
-  const [sortBy, setSortBy] = useState<"recent" | "popular">("recent");
+  const [sortMode, setSortMode] = useState<ForumSortMode>("recent");
   const [showLogin, setShowLogin] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
 
   useEffect(() => {
-    loadForums();
+    void loadForums();
+    const timer = window.setInterval(() => {
+      void loadForums();
+    }, FORUM_REFRESH_MS);
+
+    return () => window.clearInterval(timer);
   }, []);
+
+  useEffect(() => {
+    if (!socket) return;
+
+    const refreshForums = () => {
+      void loadForums();
+    };
+
+    socket.on(SOCKET_EVENTS.FORUM_PRESENCE_UPDATED, refreshForums);
+    return () => {
+      socket.off(SOCKET_EVENTS.FORUM_PRESENCE_UPDATED, refreshForums);
+    };
+  }, [socket]);
 
   async function loadForums() {
     const { data } = await api.get<Forum[]>("/forums");
@@ -45,82 +93,51 @@ export function Dashboard() {
     navigate(`/forums/${forum.id}`);
   }
 
-  const filtered = forums
-    .filter((f) => f.name.toLowerCase().includes(search.toLowerCase()))
-    .sort((a, b) => {
-      if (sortBy === "popular") {
-        return (b.participants?.length ?? 0) - (a.participants?.length ?? 0);
-      }
-      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-    });
-
-  // Distribui os fóruns nas colunas esquerda/direita, alternando tamanhos
-  const left = filtered.filter((_, i) => i % 2 === 0);
-  const right = filtered.filter((_, i) => i % 2 !== 0);
+  const filtered = sortForums(
+    forums.filter((forum) => forum.name.toLowerCase().includes(search.toLowerCase())),
+    sortMode
+  );
 
   return (
     <div className="min-h-screen bg-background page-fade-in">
       <Header onLoginClick={() => setShowLogin(true)} />
 
-      <main className="px-[189px] pt-10 pb-24 flex flex-col gap-8">
+      <main className="layout-page-x pt-6 sm:pt-10 pb-16 sm:pb-24 flex flex-col gap-6 sm:gap-8">
         <div className="text-textgray">
-          <p className="font-poppins font-light text-3xl m-0 leading-8">Opa!</p>
-          <p className="font-poppins font-bold text-xl m-0 leading-8">
+          <p className="font-poppins font-light text-2xl sm:text-[32px] m-0 leading-8">Opa!</p>
+          <p className="font-poppins font-bold text-lg sm:text-xl m-0 leading-8 mt-1">
             Sobre o que gostaria de falar hoje?
           </p>
         </div>
 
-        <div className="flex gap-[18px] items-start w-full max-w-[1062px]">
-          <div className="flex-1 h-11 bg-background border border-primary-dark rounded-button flex items-center justify-between pl-6 pr-1.5">
-            <input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Em busca de uma sala? Encontre-a aqui"
-              className="bg-transparent outline-none font-poppins font-light text-sm text-bordergray flex-1"
-            />
-            <button className="bg-primary-dark h-11 px-4 rounded-button text-background font-bold">
-              →
+        <div className="flex flex-col gap-4 w-full">
+          <div className="flex flex-col lg:flex-row gap-3 lg:gap-[18px] lg:items-center w-full">
+            <SearchBar value={search} onChange={setSearch} />
+            <button
+              type="button"
+              onClick={() => requireAuth(() => setShowCreate(true))}
+              className="bg-primary-dark h-11 px-5 rounded-button font-poppins font-semibold text-sm sm:text-base text-background whitespace-nowrap shrink-0 hover:brightness-110 transition-all w-full lg:w-auto"
+            >
+              Ou crie seu próprio 4um
             </button>
           </div>
-          <select
-            value={sortBy}
-            onChange={(e) => setSortBy(e.target.value as "recent" | "popular")}
-            className="h-11 px-4 rounded-button border border-bordergray bg-background font-poppins text-sm text-textgray outline-none"
-          >
-            <option value="recent">Mais recentes</option>
-            <option value="popular">Mais populares</option>
-          </select>
-          <button
-            onClick={() => requireAuth(() => setShowCreate(true))}
-            className="bg-primary-dark h-11 px-4 rounded-button font-poppins font-semibold text-base text-background whitespace-nowrap"
-          >
-            Ou crie seu próprio 4um
-          </button>
+          <ForumSortToggle value={sortMode} onChange={setSortMode} />
         </div>
 
-        <div className="flex gap-5 items-start w-full">
-          <div className="flex flex-col gap-6 flex-1">
-            {left.map((forum, idx) => (
-              <ForumCard
-                key={forum.id}
-                forum={forum}
-                size={idx === 0 ? "extra-large" : idx % 2 === 0 ? "medium" : "small"}
-                featured={idx === 0}
-                onClick={() => handleEnterForum(forum)}
-              />
-            ))}
-          </div>
-          <div className="flex flex-col gap-6 flex-1">
-            {right.map((forum, idx) => (
-              <ForumCard
-                key={forum.id}
-                forum={forum}
-                size={idx % 3 === 1 ? "large" : "medium"}
-                featured={idx % 3 === 1}
-                onClick={() => handleEnterForum(forum)}
-              />
-            ))}
-          </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-5 w-full">
+          {filtered.map((forum, index) => {
+            const layout = getCardLayout(index);
+            return (
+              <div key={forum.id} className={layout.colSpan}>
+                <ForumCard
+                  forum={forum}
+                  size={layout.size}
+                  featured={layout.featured}
+                  onClick={() => requireAuth(() => void handleEnterForum(forum))}
+                />
+              </div>
+            );
+          })}
         </div>
       </main>
 

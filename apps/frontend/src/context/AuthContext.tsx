@@ -15,7 +15,7 @@ interface AuthContextData {
     password: string,
     captchaToken: string
   ) => Promise<void>;
-  loginWithGoogle: (idToken: string) => Promise<void>;
+  loginWithGoogle: (code: string) => Promise<void>;
   verifyMfa: (mfaToken: string, code: string) => Promise<void>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
@@ -36,7 +36,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   async function restoreSession() {
     try {
-      const { data } = await api.get<User>("/auth/me");
+      const { data } = await api.get<User | null>("/auth/me");
       setUser(data);
     } catch {
       setUser(null);
@@ -75,8 +75,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(data.user);
   }
 
-  async function loginWithGoogle(idToken: string) {
-    const { data } = await api.post("/auth/google", { idToken });
+  async function loginWithGoogle(code: string) {
+    const { data } = await api.post("/auth/google", {
+      code,
+      redirectUri: window.location.origin,
+    });
     setUser(data.user);
   }
 

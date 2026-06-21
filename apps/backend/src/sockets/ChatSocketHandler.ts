@@ -7,12 +7,16 @@ import {
   SendPrivateMessagePayload,
   TypingPayload,
   LeaveForumPayload,
+  ReactToMessagePayload,
 } from "@tech4um/shared";
 import { TokenService } from "../utils/TokenService";
 import { tokenBlacklist } from "../utils/TokenBlacklist";
 import { AUTH_COOKIE_NAME } from "../utils/authCookie";
 import { ForumRepository } from "../repositories/ForumRepository";
 import { MessageService } from "../services/MessageService";
+import { MessageReactionService } from "../services/MessageReactionService";
+import { toChatMessage } from "../utils/messageSerializer";
+import { isValidUploadedImageUrl } from "../utils/imageUpload";
 
 interface AuthenticatedSocket extends Socket {
   userId?: string;
@@ -50,6 +54,7 @@ const REVALIDATION_INTERVAL_MS = 5 * 60 * 1000;
 export class ChatSocketHandler {
   private forumRepository = new ForumRepository();
   private messageService = new MessageService();
+  private messageReactionService = new MessageReactionService();
 
   constructor(private io: Server) {
     this.io.use(this.authenticate);
@@ -107,6 +112,9 @@ export class ChatSocketHandler {
     socket.on(SOCKET_EVENTS.LEAVE_FORUM, ({ forumId }: LeaveForumPayload) =>
       this.onLeaveForum(socket, forumId)
     );
+    socket.on(SOCKET_EVENTS.REACT_TO_MESSAGE, (payload: ReactToMessagePayload) =>
+      this.onReactToMessage(socket, payload)
+    );
     socket.on("disconnect", () => {
       clearInterval(revalidationTimer);
       messageCounters.delete(socket.id);
@@ -131,13 +139,31 @@ export class ChatSocketHandler {
     // o token bruto no socket e chamar TokenService.verify() de novo aqui.
   }
 
+  private broadcastPresenceUpdate(...forumIds: string[]) {
+    for (const forumId of new Set(forumIds)) {
+      this.io.emit(SOCKET_EVENTS.FORUM_PRESENCE_UPDATED, { forumId });
+    }
+  }
+
   private async onJoinForum(socket: AuthenticatedSocket, forumId: string) {
     if (!socket.userId) return;
+
+    const leftForums = await this.forumRepository.setOfflineInOtherForums(
+      socket.userId,
+      forumId
+    );
 
     await this.forumRepository.addParticipant(forumId, socket.userId);
     await this.forumRepository.setOnlineStatus(forumId, socket.userId, true);
 
     socket.join(forumId);
+
+    for (const leftForumId of leftForums) {
+      socket.leave(leftForumId);
+      this.io.to(leftForumId).emit(SOCKET_EVENTS.PARTICIPANT_OFFLINE, {
+        userId: socket.userId,
+      });
+    }
 
     this.io.to(forumId).emit(SOCKET_EVENTS.PARTICIPANT_ONLINE, {
       userId: socket.userId,
@@ -148,6 +174,8 @@ export class ChatSocketHandler {
       message: `${socket.username} entrou na sala`,
     });
 
+    this.broadcastPresenceUpdate(...leftForums, forumId);
+
     socket.emit(SOCKET_EVENTS.FORUM_JOINED, { forumId });
   }
 
@@ -156,15 +184,18 @@ export class ChatSocketHandler {
     payload: SendPublicMessagePayload
   ) {
     if (!socket.userId) return;
-    if (!this.validateMessagePayload(socket, payload?.content)) return;
+    if (!this.validateMessagePayload(socket, payload?.content, payload?.imageUrl)) return;
 
     const message = await this.messageService.sendPublic({
       forumId: payload.forumId,
       senderId: socket.userId,
-      content: payload.content,
+      content: payload.content ?? "",
+      imageUrl: payload.imageUrl,
     });
 
-    this.io.to(payload.forumId).emit(SOCKET_EVENTS.NEW_PUBLIC_MESSAGE, { message });
+    this.io.to(payload.forumId).emit(SOCKET_EVENTS.NEW_PUBLIC_MESSAGE, {
+      message: toChatMessage(message),
+    });
   }
 
   private async onPrivateMessage(
@@ -172,7 +203,7 @@ export class ChatSocketHandler {
     payload: SendPrivateMessagePayload
   ) {
     if (!socket.userId) return;
-    if (!this.validateMessagePayload(socket, payload?.content)) return;
+    if (!this.validateMessagePayload(socket, payload?.content, payload?.imageUrl)) return;
 
     // Garante que o destinatário realmente participa do fórum em questão —
     // evita que um usuário autenticado envie mensagens "privadas" para
@@ -193,19 +224,28 @@ export class ChatSocketHandler {
       forumId: payload.forumId,
       senderId: socket.userId,
       recipientId: payload.recipientId,
-      content: payload.content,
+      content: payload.content ?? "",
+      imageUrl: payload.imageUrl,
     });
 
+    const serialized = toChatMessage(message);
+
     // Emite somente para o remetente e o destinatário
-    socket.emit(SOCKET_EVENTS.NEW_PRIVATE_MESSAGE, { message });
+    socket.emit(SOCKET_EVENTS.NEW_PRIVATE_MESSAGE, { message: serialized });
 
     const recipientSocketId = onlineUsers.get(payload.recipientId);
     if (recipientSocketId) {
-      this.io.to(recipientSocketId).emit(SOCKET_EVENTS.NEW_PRIVATE_MESSAGE, { message });
+      this.io.to(recipientSocketId).emit(SOCKET_EVENTS.NEW_PRIVATE_MESSAGE, {
+        message: serialized,
+      });
     }
   }
 
-  private validateMessagePayload(socket: AuthenticatedSocket, content: unknown): boolean {
+  private validateMessagePayload(
+    socket: AuthenticatedSocket,
+    content: unknown,
+    imageUrl?: unknown
+  ): boolean {
     if (isRateLimited(socket.id)) {
       socket.emit(SOCKET_EVENTS.SYSTEM_NOTICE, {
         message: "Você está enviando mensagens muito rápido. Aguarde um instante.",
@@ -213,9 +253,28 @@ export class ChatSocketHandler {
       return false;
     }
 
-    if (typeof content !== "string" || content.trim().length === 0 || content.length > 2000) {
+    const text = typeof content === "string" ? content : "";
+    const image = typeof imageUrl === "string" ? imageUrl : "";
+    const hasText = text.trim().length > 0;
+    const hasImage = image.length > 0 && isValidUploadedImageUrl(image);
+
+    if (!hasText && !hasImage) {
       socket.emit(SOCKET_EVENTS.SYSTEM_NOTICE, {
         message: "Mensagem inválida (vazia ou excede o tamanho máximo).",
+      });
+      return false;
+    }
+
+    if (text.length > 2000) {
+      socket.emit(SOCKET_EVENTS.SYSTEM_NOTICE, {
+        message: "Mensagem inválida (vazia ou excede o tamanho máximo).",
+      });
+      return false;
+    }
+
+    if (image && !isValidUploadedImageUrl(image)) {
+      socket.emit(SOCKET_EVENTS.SYSTEM_NOTICE, {
+        message: "Imagem anexada inválida.",
       });
       return false;
     }
@@ -227,6 +286,55 @@ export class ChatSocketHandler {
     socket.to(forumId).emit(SOCKET_EVENTS.USER_TYPING, { username: socket.username });
   }
 
+  private async onReactToMessage(
+    socket: AuthenticatedSocket,
+    payload: ReactToMessagePayload
+  ) {
+    if (!socket.userId || !payload?.messageId || !payload?.forumId || !payload?.emoji) return;
+
+    try {
+      const reactions = await this.messageReactionService.toggleReaction(
+        payload.messageId,
+        socket.userId,
+        payload.emoji
+      );
+
+      const message = await this.messageService.getById(payload.messageId);
+      if (!message) return;
+
+      const serializedReactions = reactions.map((reaction) => ({
+        emoji: reaction.emoji,
+        userId: reaction.userId,
+        user: reaction.user?.toPublic(),
+      }));
+
+      const updatePayload = {
+        messageId: payload.messageId,
+        forumId: payload.forumId,
+        reactions: serializedReactions,
+      };
+
+      if (message.type === "public") {
+        this.io.to(payload.forumId).emit(SOCKET_EVENTS.MESSAGE_REACTION_UPDATED, updatePayload);
+        return;
+      }
+
+      socket.emit(SOCKET_EVENTS.MESSAGE_REACTION_UPDATED, updatePayload);
+
+      const otherUserId =
+        message.senderId === socket.userId ? message.recipientId : message.senderId;
+      if (!otherUserId) return;
+
+      const recipientSocketId = onlineUsers.get(otherUserId);
+      if (recipientSocketId) {
+        this.io.to(recipientSocketId).emit(SOCKET_EVENTS.MESSAGE_REACTION_UPDATED, updatePayload);
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Não foi possível reagir à mensagem.";
+      socket.emit(SOCKET_EVENTS.SYSTEM_NOTICE, { message });
+    }
+  }
+
   private async onLeaveForum(socket: AuthenticatedSocket, forumId: string) {
     if (!socket.userId) return;
     socket.leave(forumId);
@@ -235,19 +343,24 @@ export class ChatSocketHandler {
     this.io.to(forumId).emit(SOCKET_EVENTS.SYSTEM_NOTICE, {
       message: `${socket.username} saiu da sala`,
     });
+    this.broadcastPresenceUpdate(forumId);
   }
 
   private onDisconnect(socket: AuthenticatedSocket) {
     if (!socket.userId) return;
     onlineUsers.delete(socket.userId);
 
+    const affectedForums: string[] = [];
     socket.rooms.forEach((forumId) => {
       if (forumId === socket.id) return;
+      affectedForums.push(forumId);
       this.forumRepository.setOnlineStatus(forumId, socket.userId!, false);
       this.io.to(forumId).emit(SOCKET_EVENTS.PARTICIPANT_OFFLINE, { userId: socket.userId });
       this.io.to(forumId).emit(SOCKET_EVENTS.SYSTEM_NOTICE, {
         message: `${socket.username} saiu da sala`,
       });
     });
+
+    this.broadcastPresenceUpdate(...affectedForums);
   }
 }

@@ -4,7 +4,7 @@ import { tokenBlacklist } from "../utils/TokenBlacklist";
 import { AppError } from "../utils/AppError";
 import { AUTH_COOKIE_NAME } from "../utils/authCookie";
 
-function extractToken(req: Request): string | null {
+export function extractToken(req: Request): string | null {
   const cookieToken = req.cookies?.[AUTH_COOKIE_NAME];
   if (cookieToken) return cookieToken;
 
@@ -14,6 +14,20 @@ function extractToken(req: Request): string | null {
   if (header?.startsWith("Bearer ")) return header.slice(7);
 
   return null;
+}
+
+/** Resolve o usuário da requisição sem exigir autenticação (retorna null se ausente/inválida). */
+export async function resolveUserIdFromRequest(req: Request): Promise<string | null> {
+  const token = extractToken(req);
+  if (!token) return null;
+
+  try {
+    const payload = TokenService.verify(token);
+    if (await tokenBlacklist.isRevoked(payload.jti)) return null;
+    return payload.sub;
+  } catch {
+    return null;
+  }
 }
 
 export async function authMiddleware(req: Request, _res: Response, next: NextFunction) {

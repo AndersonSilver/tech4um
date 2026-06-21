@@ -21,8 +21,13 @@ export function MfaSetup() {
       setQrCode(data.qrCodeDataUrl);
       setSecret(data.secret);
       setStep("showing-qr");
-    } catch {
-      setError("Não foi possível iniciar a configuração de MFA.");
+    } catch (error: unknown) {
+      const status = (error as { response?: { status?: number } })?.response?.status;
+      if (status === 401) {
+        setError("Sessão expirada. Faça login novamente e tente ativar o MFA.");
+      } else {
+        setError("Não foi possível iniciar a configuração de MFA.");
+      }
     } finally {
       setLoading(false);
     }

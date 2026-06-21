@@ -6,6 +6,7 @@ interface SendMessageInput {
   senderId: string;
   content: string;
   recipientId?: string;
+  imageUrl?: string;
 }
 
 export class MessageService {
@@ -28,5 +29,9 @@ export class MessageService {
   async listVisibleForUser(forumId: string, userId: string) {
     const messages = await this.messageRepository.findByForum(forumId);
     return messages.filter((message) => message.isVisibleTo(userId));
+  }
+
+  async getById(messageId: string) {
+    return this.messageRepository.findById(messageId);
   }
 }

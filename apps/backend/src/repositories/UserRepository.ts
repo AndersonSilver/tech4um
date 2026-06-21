@@ -21,6 +21,11 @@ export class UserRepository {
     return this.repo.findOne({ where: { googleId } });
   }
 
+  async updateProfile(userId: string, data: { username?: string; avatarUrl?: string }) {
+    await this.repo.update(userId, data);
+    return this.repo.findOneOrFail({ where: { id: userId } });
+  }
+
   async linkGoogleAccount(userId: string, googleId: string, avatarUrl?: string) {
     await this.repo.update(userId, { googleId, avatarUrl });
     return this.repo.findOneOrFail({ where: { id: userId } });

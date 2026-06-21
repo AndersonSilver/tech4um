@@ -1,0 +1,45 @@
+# Infraestrutura local para desenvolvimento (pnpm dev).
+# Dados persistem no volume tech4um_postgres_data entre reinícios.
+name: tech4um
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: "${DB_PASSWORD:-postgres}"
+      POSTGRES_DB: tech4um
+    ports:
+      - "5433:5432"
+    volumes:
+      - tech4um_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    environment:
+      REDIS_PASSWORD: "${REDIS_PASSWORD:-redis_dev_local}"
+    command: >
+      sh -c 'redis-server --requirepass "$$REDIS_PASSWORD"'
+    ports:
+      - "6379:6379"
+    volumes:
+      - tech4um_redis_data:/data
+    healthcheck:
+      test:
+        ["CMD-SHELL", 'redis-cli -a "$$REDIS_PASSWORD" --no-auth-warning ping | grep -q PONG']
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  tech4um_postgres_data:
+    name: tech4um_postgres_data
+  tech4um_redis_data:
+    name: tech4um_redis_data

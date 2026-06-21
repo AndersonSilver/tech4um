@@ -11,7 +11,7 @@ export class ForumRepository {
   findAll() {
     return this.repo.find({
       order: { createdAt: "DESC" },
-      relations: ["owner", "participants"],
+      relations: ["owner", "participants", "participants.user"],
     });
   }
 
@@ -41,5 +41,29 @@ export class ForumRepository {
 
   setOnlineStatus(forumId: string, userId: string, isOnline: boolean) {
     return this.participantRepo.update({ forumId, userId }, { isOnline });
+  }
+
+  /** Marca offline em todas as salas exceto a ativa (usuário só "vê" uma sala por vez). */
+  async setOfflineInOtherForums(userId: string, activeForumId: string): Promise<string[]> {
+    const staleOnline = await this.participantRepo.find({
+      where: { userId, isOnline: true },
+    });
+
+    const forumIds = staleOnline
+      .filter((participant) => participant.forumId !== activeForumId)
+      .map((participant) => participant.forumId);
+
+    if (forumIds.length === 0) return [];
+
+    await this.participantRepo
+      .createQueryBuilder()
+      .update()
+      .set({ isOnline: false })
+      .where("user_id = :userId", { userId })
+      .andWhere("forum_id != :activeForumId", { activeForumId })
+      .andWhere("is_online = true")
+      .execute();
+
+    return forumIds;
   }
 }

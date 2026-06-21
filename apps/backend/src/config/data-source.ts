@@ -4,6 +4,7 @@ import dotenv from "dotenv";
 import { User } from "../entities/User";
 import { Forum } from "../entities/Forum";
 import { Message } from "../entities/Message";
+import { MessageReaction } from "../entities/MessageReaction";
 import { ForumParticipant } from "../entities/ForumParticipant";
 
 dotenv.config();
@@ -18,8 +19,9 @@ export const AppDataSource = new DataSource({
   // CRÍTICO: nunca usar synchronize=true em produção — pode alterar o schema
   // do banco de forma destrutiva e sem controle de versão. Em produção, usar
   // sempre `npm run migration:run`.
-  synchronize: process.env.NODE_ENV !== "production",
+  synchronize:
+    process.env.NODE_ENV !== "production" || process.env.TYPEORM_SYNC_ONCE === "true",
   logging: false,
-  entities: [User, Forum, Message, ForumParticipant],
+  entities: [User, Forum, Message, ForumParticipant, MessageReaction],
   migrations: ["src/migrations/*.ts"],
 });

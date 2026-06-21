@@ -1,0 +1,49 @@
+# Nginx no HOST (VPS) — um subdomínio para o Tech4um.
+# Copie para /etc/nginx/sites-available/tech4um e ative com certbot.
+#
+# Ajuste:
+#   - server_name
+#   - portas TECH4UM_* se mudou no .env (padrão 8173 front, 8174 back)
+
+upstream tech4um_frontend {
+    server 127.0.0.1:8173;
+}
+
+upstream tech4um_backend {
+    server 127.0.0.1:8174;
+}
+
+server {
+    listen 80;
+    server_name tech4um.seudominio.com;
+
+    # Certbot preenche HTTPS depois: certbot --nginx -d tech4um.seudominio.com
+    location / {
+        proxy_pass http://tech4um_frontend;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    location /api/ {
+        proxy_pass http://tech4um_backend;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        client_max_body_size 16m;
+    }
+
+    location /socket.io/ {
+        proxy_pass http://tech4um_backend;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 86400;
+    }
+}

@@ -3,6 +3,7 @@ import { z } from "zod";
 import { AuthService } from "../services/AuthService";
 import { MfaService } from "../services/MfaService";
 import { CaptchaVerifier } from "../services/CaptchaVerifier";
+import { resolveUserIdFromRequest } from "../middlewares/authMiddleware";
 import { TokenService } from "../utils/TokenService";
 import { tokenBlacklist } from "../utils/TokenBlacklist";
 import { setAuthCookie, clearAuthCookie } from "../utils/authCookie";
@@ -13,7 +14,9 @@ import type {
   EnableMfaRequestDTO,
   DisableMfaRequestDTO,
   VerifyMfaRequestDTO,
+  UpdateAvatarRequestDTO,
 } from "@tech4um/shared";
+import { PRESET_AVATAR_IDS } from "@tech4um/shared";
 
 // Política de senha: mínimo 8 caracteres, com letra maiúscula, minúscula e número.
 const passwordSchema = z
@@ -37,7 +40,8 @@ const loginSchema: z.ZodType<LoginRequestDTO> = z.object({
 });
 
 const googleLoginSchema = z.object({
-  idToken: z.string().min(10),
+  code: z.string().min(10),
+  redirectUri: z.string().url(),
 });
 
 const verifyMfaSchema: z.ZodType<VerifyMfaRequestDTO> = z.object({
@@ -56,6 +60,15 @@ const disableMfaSchema: z.ZodType<DisableMfaRequestDTO> = z.object({
 const resendVerificationSchema = z.object({ email: z.string().email() });
 const verifyEmailSchema = z.object({ token: z.string().min(10) });
 
+const updateAvatarSchema: z.ZodType<UpdateAvatarRequestDTO> = z
+  .object({
+    dataUrl: z.string().min(1).optional(),
+    presetId: z.enum(PRESET_AVATAR_IDS).optional(),
+  })
+  .refine((data) => Boolean(data.dataUrl || data.presetId), {
+    message: "Informe uma foto ou um avatar",
+  });
+
 export class AuthController {
   constructor(
     private authService: AuthService = new AuthService(),
@@ -65,7 +78,7 @@ export class AuthController {
   register = async (req: Request, res: Response, next: NextFunction) => {
     try {
       const data = registerSchema.parse(req.body);
-      await CaptchaVerifier.verify(data.captchaToken, req.ip);
+      await CaptchaVerifier.verify(data.captchaToken, req.ip, "register");
 
       const { user, token } = await this.authService.register(data);
       setAuthCookie(res, token);
@@ -78,7 +91,7 @@ export class AuthController {
   login = async (req: Request, res: Response, next: NextFunction) => {
     try {
       const data = loginSchema.parse(req.body);
-      await CaptchaVerifier.verify(data.captchaToken, req.ip);
+      await CaptchaVerifier.verify(data.captchaToken, req.ip, "login");
 
       const result = await this.authService.login(data);
 
@@ -95,8 +108,8 @@ export class AuthController {
 
   google = async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const { idToken } = googleLoginSchema.parse(req.body);
-      const result = await this.authService.loginWithGoogle(idToken);
+      const { code, redirectUri } = googleLoginSchema.parse(req.body);
+      const result = await this.authService.loginWithGoogle(code, redirectUri);
       setAuthCookie(res, result.token);
       return res.status(200).json({ user: result.user });
     } catch (error) {
@@ -121,9 +134,28 @@ export class AuthController {
 
   me = async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const userId = (req as any).userId as string;
+      const userId = await resolveUserIdFromRequest(req);
+      if (!userId) {
+        return res.status(200).json(null);
+      }
+
       const profile = await this.authService.getProfile(userId);
       return res.status(200).json(profile);
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  updateAvatar = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const userId = (req as Request & { userId?: string }).userId;
+      if (!userId) {
+        throw new AppError("Não autenticado", 401);
+      }
+
+      const data = updateAvatarSchema.parse(req.body);
+      const user = await this.authService.updateAvatar(userId, data);
+      return res.status(200).json({ user });
     } catch (error) {
       next(error);
     }

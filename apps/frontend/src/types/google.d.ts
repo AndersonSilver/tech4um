@@ -1,32 +1,31 @@
-interface GoogleCredentialResponse {
-  credential: string;
+interface GoogleCodeResponse {
+  code: string;
+  scope: string;
+  error?: string;
+  error_description?: string;
 }
 
-interface GoogleAccountsId {
-  initialize: (config: {
+interface GoogleCodeClient {
+  requestCode: () => void;
+}
+
+interface GoogleOAuth2 {
+  initCodeClient: (config: {
     client_id: string;
-    callback: (response: GoogleCredentialResponse) => void;
-  }) => void;
-  renderButton: (parent: HTMLElement, options: Record<string, unknown>) => void;
+    scope: string;
+    ux_mode: "popup" | "redirect";
+    callback: (response: GoogleCodeResponse) => void;
+  }) => GoogleCodeClient;
 }
 
 interface Window {
   google?: {
     accounts: {
-      id: GoogleAccountsId;
+      oauth2: GoogleOAuth2;
     };
   };
-  turnstile?: {
-    render: (
-      container: string | HTMLElement,
-      options: {
-        sitekey: string;
-        callback: (token: string) => void;
-        "expired-callback"?: () => void;
-        theme?: "light" | "dark" | "auto";
-      }
-    ) => string;
-    reset: (widgetId?: string) => void;
-    remove: (widgetId: string) => void;
+  grecaptcha?: {
+    ready: (callback: () => void) => void;
+    execute: (siteKey: string, options: { action: string }) => Promise<string>;
   };
 }

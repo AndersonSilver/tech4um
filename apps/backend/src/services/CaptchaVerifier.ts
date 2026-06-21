@@ -1,28 +1,25 @@
 import { AppError } from "../utils/AppError";
 import { logger } from "../utils/logger";
 
-const VERIFY_URL = "https://challenges.cloudflare.com/turnstile/v0/siteverify";
+const VERIFY_URL = "https://www.google.com/recaptcha/api/siteverify";
 
-interface TurnstileVerifyResponse {
+interface RecaptchaVerifyResponse {
   success: boolean;
+  score?: number;
+  action?: string;
   "error-codes"?: string[];
 }
 
-/**
- * Cloudflare Turnstile foi escolhido em vez do reCAPTCHA por ser gratuito,
- * mais simples de auto-hospedar (não exige conta Google) e não depender de
- * cookies de terceiros para funcionar — bom encaixe para um VPS próprio.
- */
 export class CaptchaVerifier {
-  static async verify(token: string, remoteIp?: string): Promise<void> {
-    const secret = process.env.TURNSTILE_SECRET_KEY;
+  static async verify(
+    token: string,
+    remoteIp?: string,
+    expectedAction?: string
+  ): Promise<void> {
+    const secret = process.env.RECAPTCHA_SECRET_KEY;
 
     if (!secret) {
-      // Em desenvolvimento, é comum não ter as chaves configuradas ainda.
-      // Em produção, isso é tratado como erro fatal na inicialização do servidor
-      // (ver assertRequiredEnv em server.ts), então chegar aqui sem secret só
-      // deve acontecer em dev — registramos um aviso e deixamos passar.
-      logger.warn("TURNSTILE_SECRET_KEY não configurado — pulando verificação de CAPTCHA (dev only).");
+      logger.warn("RECAPTCHA_SECRET_KEY não configurado — pulando verificação de CAPTCHA (dev only).");
       return;
     }
 
@@ -34,10 +31,42 @@ export class CaptchaVerifier {
     if (remoteIp) body.append("remoteip", remoteIp);
 
     const response = await fetch(VERIFY_URL, { method: "POST", body });
-    const data = (await response.json()) as TurnstileVerifyResponse;
+    const data = (await response.json()) as RecaptchaVerifyResponse;
 
     if (!data.success) {
-      logger.warn("Verificação de CAPTCHA falhou", { errors: data["error-codes"] });
+      const errors = data["error-codes"] ?? [];
+      logger.warn("Verificação de CAPTCHA falhou", { errors });
+
+      const needsMigration = errors.some((code) =>
+        code.toLowerCase().includes("migrate")
+      );
+      if (needsMigration) {
+        throw new AppError(
+          "A chave reCAPTCHA precisa ser migrada no Google Cloud. Acesse https://www.google.com/recaptcha/admin e migre a site key para um projeto GCP (sem alterar o código).",
+          503
+        );
+      }
+
+      throw new AppError("Falha na verificação de CAPTCHA. Tente novamente.", 400);
+    }
+
+    if (data.score !== undefined) {
+      const minScore = Number(process.env.RECAPTCHA_MIN_SCORE ?? "0.5");
+      if (data.score < minScore) {
+        logger.warn("Score de reCAPTCHA v3 abaixo do limite", {
+          score: data.score,
+          minScore,
+          action: data.action,
+        });
+        throw new AppError("Falha na verificação de CAPTCHA. Tente novamente.", 400);
+      }
+    }
+
+    if (expectedAction && data.action && data.action !== expectedAction) {
+      logger.warn("Ação de reCAPTCHA v3 inesperada", {
+        expected: expectedAction,
+        received: data.action,
+      });
       throw new AppError("Falha na verificação de CAPTCHA. Tente novamente.", 400);
     }
   }

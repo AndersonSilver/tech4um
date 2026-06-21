@@ -10,7 +10,8 @@ router.post("/register", authRateLimiter, controller.register);
 router.post("/login", authRateLimiter, controller.login);
 router.post("/google", authRateLimiter, controller.google);
 router.post("/logout", authMiddleware, controller.logout);
-router.get("/me", authMiddleware, controller.me);
+router.get("/me", controller.me);
+router.patch("/profile/avatar", authMiddleware, controller.updateAvatar);
 
 // Verificação de e-mail
 router.get("/verify-email", controller.verifyEmail);

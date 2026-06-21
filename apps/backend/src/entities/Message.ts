@@ -5,9 +5,11 @@ import {
   CreateDateColumn,
   ManyToOne,
   JoinColumn,
+  OneToMany,
 } from "typeorm";
 import { User } from "./User";
 import { Forum } from "./Forum";
+import { MessageReaction } from "./MessageReaction";
 
 export enum MessageType {
   PUBLIC = "public",
@@ -21,6 +23,9 @@ export class Message {
 
   @Column({ type: "text" })
   content!: string;
+
+  @Column({ name: "image_url", nullable: true })
+  imageUrl?: string;
 
   @Column({ type: "enum", enum: MessageType, default: MessageType.PUBLIC })
   type!: MessageType;
@@ -48,6 +53,9 @@ export class Message {
 
   @CreateDateColumn({ name: "created_at" })
   createdAt!: Date;
+
+  @OneToMany(() => MessageReaction, (reaction) => reaction.message)
+  reactions?: MessageReaction[];
 
   isVisibleTo(userId: string): boolean {
     if (this.type === MessageType.PUBLIC) return true;

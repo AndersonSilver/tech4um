@@ -4,6 +4,7 @@ import express from "express";
 import cors from "cors";
 import helmet from "helmet";
 import cookieParser from "cookie-parser";
+import path from "path";
 import { createServer } from "http";
 import { Server } from "socket.io";
 import { AppDataSource } from "./config/data-source";
@@ -13,6 +14,10 @@ import { requestLogger } from "./middlewares/requestLogger";
 import { generalRateLimiter } from "./middlewares/rateLimiters";
 import { ChatSocketHandler } from "./sockets/ChatSocketHandler";
 import { logger } from "./utils/logger";
+import { getUploadsDirectory } from "./utils/imageUpload";
+import { seedDemoDataIfNeeded } from "./services/DemoDataSeeder";
+
+const presetAvatarsDir = path.resolve(__dirname, "../assets/avatars");
 
 dotenv.config();
 
@@ -30,8 +35,8 @@ function assertRequiredEnv() {
       // declarar explicitamente o(s) domínio(s) do frontend.
       throw new Error("CORS_ORIGIN é obrigatório em produção (não usar wildcard '*').");
     }
-    if (!process.env.TURNSTILE_SECRET_KEY) {
-      throw new Error("TURNSTILE_SECRET_KEY é obrigatório em produção (proteção de CAPTCHA).");
+    if (!process.env.RECAPTCHA_SECRET_KEY) {
+      throw new Error("RECAPTCHA_SECRET_KEY é obrigatório em produção (proteção de CAPTCHA).");
     }
     if (!process.env.SMTP_HOST) {
       throw new Error("SMTP_HOST é obrigatório em produção (envio de e-mail de verificação).");
@@ -53,11 +58,21 @@ async function bootstrap() {
   await AppDataSource.initialize();
   logger.info("📦 Conectado ao banco de dados");
 
+  await seedDemoDataIfNeeded(AppDataSource);
+
   const app = express();
+
+  if (process.env.NODE_ENV === "production") {
+    app.set("trust proxy", 1);
+  }
 
   // Helmet: cabeçalhos de segurança padrão (X-Content-Type-Options, HSTS quando
   // servido via HTTPS, remoção de X-Powered-By, etc.)
-  app.use(helmet());
+  app.use(
+    helmet({
+      crossOriginResourcePolicy: { policy: "cross-origin" },
+    })
+  );
 
   const corsOrigin = process.env.CORS_ORIGIN || "http://localhost:5173";
   app.use(
@@ -68,11 +83,13 @@ async function bootstrap() {
   );
 
   app.use(cookieParser());
-  // Limite de tamanho do payload — mitiga ataques simples de DoS por payload gigante.
-  app.use(express.json({ limit: "100kb" }));
+  // Base64 de imagem (até 10MB) ocupa ~13,5MB no JSON — margem para o payload completo.
+  app.use(express.json({ limit: "16mb" }));
   app.use(requestLogger);
   app.use(generalRateLimiter);
 
+  app.use("/api/uploads", express.static(getUploadsDirectory()));
+  app.use("/api/avatars", express.static(presetAvatarsDir));
   app.use("/api", routes);
   app.use(errorHandler);
 

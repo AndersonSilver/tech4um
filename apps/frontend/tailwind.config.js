@@ -5,6 +5,8 @@ export default {
     extend: {
       colors: {
         background: "#F3F3F3",
+        surface: "#EFEFEF",
+        white: "#FFFFFF",
         primary: {
           default: "#1799F6",
           dark: "#1772B2",
@@ -24,6 +26,7 @@ export default {
         card: "24px",
         compact: "16px",
         button: "8px",
+        search: "16px",
       },
       boxShadow: {
         header: "2px 2px 8px 0px rgba(0,0,0,0.04)",

@@ -26,7 +26,9 @@ COPY --from=build /app/packages/shared/dist ./packages/shared/dist
 COPY --from=build /app/packages/shared/package.json ./packages/shared/
 COPY --from=build /app/apps/backend/dist ./apps/backend/dist
 COPY --from=build /app/apps/backend/package.json ./apps/backend/
+COPY --from=build /app/apps/backend/assets ./apps/backend/assets
 
 WORKDIR /app/apps/backend
+RUN mkdir -p uploads
 EXPOSE 3333
 CMD ["node", "dist/server.js"]

@@ -4,6 +4,12 @@
 @tailwind components;
 @tailwind utilities;
 
+@layer components {
+  .layout-page-x {
+    @apply px-4 sm:px-8 lg:px-16 xl:px-[189px];
+  }
+}
+
 body {
   margin: 0;
   background-color: #f3f3f3;
