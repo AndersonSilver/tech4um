@@ -4,9 +4,12 @@ import { AppError } from "../utils/AppError";
 import { logger } from "../utils/logger";
 
 function isPayloadTooLarge(error: Error): boolean {
+  const payloadType =
+    "type" in error && typeof error.type === "string" ? error.type : undefined;
+
   return (
     error.message?.includes("request entity too large") ||
-    (error as NodeJS.ErrnoException).type === "entity.too.large"
+    payloadType === "entity.too.large"
   );
 }
 
