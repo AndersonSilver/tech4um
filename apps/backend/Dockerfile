@@ -22,6 +22,7 @@ RUN pnpm --filter @tech4um/shared build \
 FROM base AS runner
 ENV NODE_ENV=production
 COPY --from=build /app/node_modules ./node_modules
+COPY --from=build /app/apps/backend/node_modules ./apps/backend/node_modules
 COPY --from=build /app/packages/shared/dist ./packages/shared/dist
 COPY --from=build /app/packages/shared/package.json ./packages/shared/
 COPY --from=build /app/apps/backend/dist ./apps/backend/dist
