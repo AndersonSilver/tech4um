@@ -81,7 +81,8 @@ services:
     volumes:
       - tech4um_uploads:/app/apps/backend/uploads
     ports:
-      - "127.0.0.1:${TECH4UM_BACKEND_PORT:-8174}:3333"
+      # 0.0.0.0 no host — NPM (Docker) alcança via 172.17.0.1; firewall bloqueia acesso externo direto.
+      - "${TECH4UM_BACKEND_PORT:-8174}:3333"
     networks:
       - tech4um_internal
 
@@ -98,7 +99,7 @@ services:
     depends_on:
       - backend
     ports:
-      - "127.0.0.1:${TECH4UM_FRONTEND_PORT:-8173}:80"
+      - "${TECH4UM_FRONTEND_PORT:-8173}:80"
     networks:
       - tech4um_internal
 
