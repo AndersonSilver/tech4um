@@ -19,9 +19,13 @@ export function SocketProvider({ children }: { children: ReactNode }) {
       return;
     }
 
+    const configured = import.meta.env.VITE_SOCKET_URL;
     const socketUrl =
-      import.meta.env.VITE_SOCKET_URL ||
-      (typeof window !== "undefined" ? window.location.origin : "http://localhost:5173");
+      configured && !configured.includes("localhost")
+        ? configured
+        : typeof window !== "undefined"
+          ? window.location.origin
+          : "http://localhost:5173";
 
     const nextSocket = io(socketUrl, {
       withCredentials: true,
