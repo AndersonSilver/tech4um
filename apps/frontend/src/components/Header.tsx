@@ -23,24 +23,28 @@ export function Header({ onLoginClick }: HeaderProps) {
   }
 
   return (
-    <header className="min-h-20 sm:h-24 w-full bg-background shadow-header flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3 layout-page-x pt-4 sm:pt-6 pb-4">
-      <div className="flex items-end gap-3 sm:gap-4 min-w-0">
+    <header className="w-full bg-background shadow-header flex flex-row items-center justify-between gap-3 layout-page-x py-3 sm:py-6 min-h-[64px] sm:min-h-24">
+      <div className="flex items-center gap-2 sm:gap-4 min-w-0 flex-1">
         <button
           type="button"
           onClick={() => navigate("/")}
           className="border-0 bg-transparent p-0 cursor-pointer shrink-0"
           aria-label="Tech4um — início"
         >
-          <img src={logoLarge} alt="Tech4um" className="h-10 sm:h-14 w-auto object-contain" />
+          <img
+            src={logoLarge}
+            alt="Tech4um"
+            className="h-9 w-auto max-w-[140px] sm:h-14 sm:max-w-none object-contain object-left"
+          />
         </button>
-        <p className="hidden md:block font-poppins font-extralight text-lg text-textgray leading-7 m-0 pb-1 truncate">
+        <p className="hidden sm:block font-poppins font-extralight text-sm md:text-lg text-textgray leading-snug m-0 truncate">
           Seu fórum sobre tecnologia!
         </p>
       </div>
 
       {isAuthenticated && user ? (
-        <div className="relative flex items-center sm:items-end gap-3 self-end sm:self-auto">
-          <div className="hidden sm:flex flex-col items-end text-textgray pb-1 min-w-0">
+        <div className="relative flex items-center gap-2 sm:gap-3 shrink-0">
+          <div className="hidden md:flex flex-col items-end text-textgray min-w-0">
             <span className="font-poppins font-bold text-sm leading-normal">
               {user.username}
             </span>
@@ -51,7 +55,7 @@ export function Header({ onLoginClick }: HeaderProps) {
           <button
             type="button"
             onClick={() => setMenuOpen((open) => !open)}
-            className="w-12 h-12 rounded-full overflow-hidden bg-bordergray border-0 p-0 cursor-pointer"
+            className="w-10 h-10 sm:w-12 sm:h-12 rounded-full overflow-hidden bg-bordergray border-0 p-0 cursor-pointer shrink-0"
             aria-label="Menu do usuário"
           >
             {avatarSrc ? (
@@ -93,10 +97,10 @@ export function Header({ onLoginClick }: HeaderProps) {
         <button
           type="button"
           onClick={onLoginClick}
-          className="mb-1 border-0 bg-transparent p-0 cursor-pointer transition-opacity hover:opacity-80"
+          className="border-0 bg-transparent p-0 cursor-pointer transition-opacity hover:opacity-80 shrink-0"
           aria-label="Fazer login"
         >
-          <img src={btnEntrarAzul} alt="Entrar" className="h-11 w-auto object-contain" />
+          <img src={btnEntrarAzul} alt="Entrar" className="h-9 sm:h-11 w-auto object-contain" />
         </button>
       )}
     </header>

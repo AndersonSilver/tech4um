@@ -68,4 +68,16 @@ describe("MessageBubble", () => {
 
     expect(screen.getByRole("dialog", { name: "Visualização ampliada da imagem" })).toBeInTheDocument();
   });
+
+  it("quebra mensagens muito longas sem espaços", () => {
+    const longMessage: Message = {
+      ...baseMessage,
+      content: "o".repeat(200),
+    };
+
+    render(<MessageBubble message={longMessage} isOwn={false} onReact={onReact} />);
+
+    expect(screen.getByText(longMessage.content)).toHaveClass("break-anywhere");
+    expect(screen.getByText(longMessage.content)).toHaveClass("text-justify");
+  });
 });

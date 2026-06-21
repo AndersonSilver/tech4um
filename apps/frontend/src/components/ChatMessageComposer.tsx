@@ -118,28 +118,29 @@ export function ChatMessageComposer({
 
   return (
     <div
-      className={`rounded-b-card flex flex-col gap-2 px-8 pt-3 pb-5 shrink-0 transition-colors ${
+      className={`rounded-b-card flex flex-col gap-2 px-4 sm:px-8 pt-3 pb-5 shrink-0 transition-colors ${
         isPrivateMode ? "bg-secondary-dark" : "bg-primary-dark"
       }`}
     >
-      <div className="flex items-center justify-between w-full gap-4">
-        <p className="font-poppins font-bold text-[10px] text-background m-0 shrink-0">
-          {isPrivateMode && recipientName
-            ? `Enviando para ${recipientName}`
-            : "Enviando para todos do 4um"}
-        </p>
-
-        <div className="flex items-center gap-4 shrink-0 ml-auto relative">
+      <div className="flex items-start justify-between w-full gap-3 min-w-0">
+        <div className="min-w-0 flex flex-col gap-1">
+          <p className="font-poppins font-bold text-[10px] text-background m-0">
+            {isPrivateMode && recipientName
+              ? `Enviando para ${recipientName}`
+              : "Enviando para todos do 4um"}
+          </p>
           {isPrivateMode && (
             <button
               type="button"
               onClick={onCancelPrivate}
-              className="font-poppins text-[10px] text-background underline border-0 bg-transparent cursor-pointer whitespace-nowrap"
+              className="font-poppins text-[10px] text-background/90 underline border-0 bg-transparent cursor-pointer p-0 text-left w-fit"
             >
-              Cancelar envio de mensagem privada
+              Cancelar mensagem privada
             </button>
           )}
+        </div>
 
+        <div className="flex items-center gap-3 shrink-0 relative">
           <button
             type="button"
             aria-label="Abrir emojis"

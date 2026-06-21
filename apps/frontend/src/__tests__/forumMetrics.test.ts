@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   countOnlineParticipants,
   countTotalParticipants,
+  filterForumsByActivity,
   getForumActivityLabel,
   sortForums,
 } from "../utils/forumMetrics";
@@ -69,5 +70,25 @@ describe("forumMetrics", () => {
 
     const sorted = sortForums([older, newer], "recent");
     expect(sorted[0].id).toBe("newer");
+  });
+
+  it("ordena por nome em ordem alfabética", () => {
+    const beta = buildForum({ id: "b", name: "Beta" });
+    const alpha = buildForum({ id: "a", name: "Alpha" });
+
+    const sorted = sortForums([beta, alpha], "name");
+    expect(sorted[0].id).toBe("a");
+  });
+
+  it("filtra salas com atividade online", () => {
+    const active = buildForum({
+      id: "active",
+      participants: [{ id: "1", userId: "a", isOnline: true, user: undefined as never }],
+    });
+    const quiet = buildForum({ id: "quiet", participants: [] });
+
+    const filtered = filterForumsByActivity([active, quiet], "online");
+    expect(filtered).toHaveLength(1);
+    expect(filtered[0].id).toBe("active");
   });
 });

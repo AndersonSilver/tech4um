@@ -9,6 +9,7 @@ interface MessageBubbleProps {
   message: Message;
   isOwn: boolean;
   senderName?: string;
+  senderAvatarUrl?: string | null;
   currentUserId?: string;
   onReact: (messageId: string, emoji: string) => void;
 }
@@ -19,10 +20,15 @@ function isEmojiOnlyMessage(text: string): boolean {
   return !/[a-zA-Z0-9À-ÿ]/.test(trimmed);
 }
 
+function shouldJustifyMessage(text: string): boolean {
+  return text.trim().length >= 60;
+}
+
 export function MessageBubble({
   message,
   isOwn,
   senderName,
+  senderAvatarUrl,
   currentUserId,
   onReact,
 }: MessageBubbleProps) {
@@ -36,14 +42,17 @@ export function MessageBubble({
   const displayName = isOwn
     ? "Você"
     : (senderName ?? message.sender?.username ?? "Usuário");
-  const avatarUrl = resolveAvatarUrl(message.sender?.avatarUrl);
+  const avatarUrl = resolveAvatarUrl(
+    senderAvatarUrl ?? message.sender?.avatarUrl
+  );
   const imageSrc = resolveMessageImageUrl(message.imageUrl);
   const emojiOnly = message.content ? isEmojiOnlyMessage(message.content) : false;
+  const justifyText = Boolean(message.content && !emojiOnly && shouldJustifyMessage(message.content));
 
   return (
-    <div className={`flex w-full overflow-visible ${isOwn ? "justify-end" : "justify-start"}`}>
+    <div className={`flex w-full min-w-0 overflow-hidden ${isOwn ? "justify-end" : "justify-start"}`}>
       <div
-        className={`flex gap-3 items-start max-w-[80%] ${
+        className={`flex gap-3 items-start max-w-[80%] min-w-0 ${
           isOwn ? "flex-row-reverse" : "flex-row"
         }`}
       >
@@ -58,7 +67,7 @@ export function MessageBubble({
         </div>
 
         <div
-          className={`relative group flex flex-col gap-1 min-w-0 ${
+          className={`relative group flex flex-col gap-1 min-w-0 max-w-full ${
             isOwn ? "items-end" : "items-start"
           }`}
         >
@@ -76,7 +85,7 @@ export function MessageBubble({
           </div>
 
           {message.type === "private" && (
-            <span className="font-poppins font-bold text-[10px] text-primary-dark">
+            <span className="font-poppins font-bold text-[10px] text-primary-dark break-words break-anywhere max-w-full">
               {isOwn
                 ? `mensagem privada para ${message.recipient?.username ?? "usuário"}`
                 : "mensagem privada"}
@@ -110,9 +119,11 @@ export function MessageBubble({
 
           {message.content && (
             <p
-              className={`font-poppins m-0 leading-relaxed whitespace-pre-wrap break-words ${
+              className={`font-poppins m-0 leading-relaxed whitespace-pre-wrap break-words break-anywhere max-w-full ${
                 emojiOnly ? "text-[28px] leading-tight" : "font-medium text-sm"
-              } ${isOwn ? "text-primary-dark text-right" : "text-textgray"}`}
+              } ${justifyText ? "text-justify" : isOwn ? "text-right" : "text-left"} ${
+                isOwn ? "text-primary-dark" : "text-textgray"
+              }`}
             >
               {message.content}
             </p>

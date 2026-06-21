@@ -17,6 +17,7 @@ import { MessageService } from "../services/MessageService";
 import { MessageReactionService } from "../services/MessageReactionService";
 import { toChatMessage } from "../utils/messageSerializer";
 import { isValidUploadedImageUrl } from "../utils/imageUpload";
+import { logger } from "../utils/logger";
 
 interface AuthenticatedSocket extends Socket {
   userId?: string;
@@ -148,35 +149,47 @@ export class ChatSocketHandler {
   private async onJoinForum(socket: AuthenticatedSocket, forumId: string) {
     if (!socket.userId) return;
 
-    const leftForums = await this.forumRepository.setOfflineInOtherForums(
-      socket.userId,
-      forumId
-    );
-
-    await this.forumRepository.addParticipant(forumId, socket.userId);
-    await this.forumRepository.setOnlineStatus(forumId, socket.userId, true);
-
+    // Entra na room imediatamente para que mensagens/typing funcionem
+    // mesmo enquanto o banco ainda persiste participação.
     socket.join(forumId);
+    socket.emit(SOCKET_EVENTS.FORUM_JOINED, { forumId });
 
-    for (const leftForumId of leftForums) {
-      socket.leave(leftForumId);
-      this.io.to(leftForumId).emit(SOCKET_EVENTS.PARTICIPANT_OFFLINE, {
+    try {
+      const leftForums = await this.forumRepository.setOfflineInOtherForums(
+        socket.userId,
+        forumId
+      );
+
+      await this.forumRepository.addParticipant(forumId, socket.userId);
+      await this.forumRepository.setOnlineStatus(forumId, socket.userId, true);
+
+      for (const leftForumId of leftForums) {
+        socket.leave(leftForumId);
+        this.io.to(leftForumId).emit(SOCKET_EVENTS.PARTICIPANT_OFFLINE, {
+          userId: socket.userId,
+        });
+      }
+
+      this.io.to(forumId).emit(SOCKET_EVENTS.PARTICIPANT_ONLINE, {
         userId: socket.userId,
+        username: socket.username,
+      });
+
+      this.io.to(forumId).emit(SOCKET_EVENTS.SYSTEM_NOTICE, {
+        message: `${socket.username} entrou na sala`,
+      });
+
+      this.broadcastPresenceUpdate(...leftForums, forumId);
+    } catch (error) {
+      logger.error("Falha ao registrar participação no fórum", {
+        forumId,
+        userId: socket.userId,
+        error,
+      });
+      socket.emit(SOCKET_EVENTS.SYSTEM_NOTICE, {
+        message: "Não foi possível entrar na sala. Tente novamente.",
       });
     }
-
-    this.io.to(forumId).emit(SOCKET_EVENTS.PARTICIPANT_ONLINE, {
-      userId: socket.userId,
-      username: socket.username,
-    });
-
-    this.io.to(forumId).emit(SOCKET_EVENTS.SYSTEM_NOTICE, {
-      message: `${socket.username} entrou na sala`,
-    });
-
-    this.broadcastPresenceUpdate(...leftForums, forumId);
-
-    socket.emit(SOCKET_EVENTS.FORUM_JOINED, { forumId });
   }
 
   private async onPublicMessage(

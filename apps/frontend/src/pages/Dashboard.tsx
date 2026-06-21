@@ -4,13 +4,13 @@ import { Header } from "../components/Header";
 import { LoginModal } from "../components/LoginModal";
 import { CreateForumModal } from "../components/CreateForumModal";
 import { ForumCard } from "../components/ForumCard";
-import { ForumSortToggle } from "../components/ForumSortToggle";
+import { ForumFilters, ForumFiltersSummary } from "../components/ForumFilters";
 import { SearchBar } from "../components/SearchBar";
 import { useAuth } from "../context/AuthContext";
 import { useSocket } from "../context/SocketContext";
 import { api } from "../services/api";
 import { Forum } from "../types";
-import { ForumSortMode, sortForums } from "../utils/forumMetrics";
+import { ForumActivityFilter, ForumSortMode, filterForumsByActivity, sortForums } from "../utils/forumMetrics";
 import { SOCKET_EVENTS } from "@tech4um/shared";
 
 type CardSize = "extra-large" | "large" | "medium" | "small";
@@ -45,6 +45,7 @@ export function Dashboard() {
   const [forums, setForums] = useState<Forum[]>([]);
   const [search, setSearch] = useState("");
   const [sortMode, setSortMode] = useState<ForumSortMode>("recent");
+  const [activityFilter, setActivityFilter] = useState<ForumActivityFilter>("all");
   const [showLogin, setShowLogin] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
 
@@ -94,7 +95,10 @@ export function Dashboard() {
   }
 
   const filtered = sortForums(
-    forums.filter((forum) => forum.name.toLowerCase().includes(search.toLowerCase())),
+    filterForumsByActivity(
+      forums.filter((forum) => forum.name.toLowerCase().includes(search.toLowerCase())),
+      activityFilter
+    ),
     sortMode
   );
 
@@ -104,15 +108,23 @@ export function Dashboard() {
 
       <main className="layout-page-x pt-6 sm:pt-10 pb-16 sm:pb-24 flex flex-col gap-6 sm:gap-8">
         <div className="text-textgray">
-          <p className="font-poppins font-light text-2xl sm:text-[32px] m-0 leading-8">Opa!</p>
-          <p className="font-poppins font-bold text-lg sm:text-xl m-0 leading-8 mt-1">
+          <p className="font-poppins font-light text-xl sm:text-[32px] m-0 leading-7 sm:leading-8">Opa!</p>
+          <p className="font-poppins font-bold text-base sm:text-xl m-0 leading-7 sm:leading-8 mt-1">
             Sobre o que gostaria de falar hoje?
           </p>
         </div>
 
         <div className="flex flex-col gap-4 w-full">
           <div className="flex flex-col lg:flex-row gap-3 lg:gap-[18px] lg:items-center w-full">
-            <SearchBar value={search} onChange={setSearch} />
+            <div className="flex gap-2 w-full min-w-0 items-stretch">
+              <SearchBar value={search} onChange={setSearch} />
+              <ForumFilters
+                sortMode={sortMode}
+                activityFilter={activityFilter}
+                onSortChange={setSortMode}
+                onActivityFilterChange={setActivityFilter}
+              />
+            </div>
             <button
               type="button"
               onClick={() => requireAuth(() => setShowCreate(true))}
@@ -121,7 +133,7 @@ export function Dashboard() {
               Ou crie seu próprio 4um
             </button>
           </div>
-          <ForumSortToggle value={sortMode} onChange={setSortMode} />
+          <ForumFiltersSummary resultCount={filtered.length} />
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-5 w-full">

@@ -84,6 +84,6 @@ describe("ParticipantsList", () => {
     );
 
     const lucasRow = screen.getByText("Lucas").closest("button");
-    expect(lucasRow?.className).toContain("bg-black/5");
+    expect(lucasRow?.className).toContain("bg-primary-dark/5");
   });
 });

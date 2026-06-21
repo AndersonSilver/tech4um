@@ -44,22 +44,24 @@ export function SearchBar({ value, onChange, onSubmit }: SearchBarProps) {
   }
 
   return (
-    <div className="flex flex-1 h-11 items-stretch min-w-0 overflow-hidden rounded-2xl border border-primary-dark bg-white">
-      <label className="flex flex-1 items-center gap-3 px-5 min-w-0 cursor-text bg-white">
+    <div className="flex flex-1 gap-2 min-w-0 w-full items-stretch">
+      <label className="flex flex-1 h-11 items-center gap-2 sm:gap-3 px-3 sm:px-4 min-w-0 cursor-text rounded-search border border-primary-dark bg-white">
         <input
           value={value}
           onChange={(e) => onChange(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
-          placeholder="Em busca de uma sala? Encontre-a aqui"
-          className="w-full bg-white outline-none border-0 font-poppins font-light text-sm text-textgray placeholder:text-bordergray"
+          placeholder="Buscar uma sala..."
+          className="w-full min-w-0 bg-transparent outline-none border-0 font-poppins font-light text-xs sm:text-sm text-textgray placeholder:text-bordergray"
         />
-        <NetworkIcon />
+        <span className="hidden sm:inline shrink-0">
+          <NetworkIcon />
+        </span>
       </label>
       <button
         type="button"
         onClick={handleSubmit}
         aria-label="Buscar sala"
-        className="shrink-0 w-11 bg-primary-dark rounded-tl-md rounded-bl-md flex items-center justify-center hover:brightness-110 transition-all"
+        className="shrink-0 h-11 w-11 rounded-button bg-primary-dark flex items-center justify-center hover:brightness-110 transition-all"
       >
         <MagnifyingGlassIcon />
       </button>

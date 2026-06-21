@@ -5,14 +5,14 @@ import { SearchBar } from "../components/SearchBar";
 describe("SearchBar", () => {
   it("exibe o valor controlado no input", () => {
     render(<SearchBar value="devops" onChange={() => {}} />);
-    expect(screen.getByPlaceholderText("Em busca de uma sala? Encontre-a aqui")).toHaveValue("devops");
+    expect(screen.getByPlaceholderText("Buscar uma sala...")).toHaveValue("devops");
   });
 
   it("chama onChange ao digitar", () => {
     const onChange = vi.fn();
     render(<SearchBar value="" onChange={onChange} />);
 
-    fireEvent.change(screen.getByPlaceholderText("Em busca de uma sala? Encontre-a aqui"), {
+    fireEvent.change(screen.getByPlaceholderText("Buscar uma sala..."), {
       target: { value: "cloud" },
     });
 
@@ -23,7 +23,7 @@ describe("SearchBar", () => {
     const onSubmit = vi.fn();
     render(<SearchBar value="ia" onChange={() => {}} onSubmit={onSubmit} />);
 
-    fireEvent.keyDown(screen.getByPlaceholderText("Em busca de uma sala? Encontre-a aqui"), {
+    fireEvent.keyDown(screen.getByPlaceholderText("Buscar uma sala..."), {
       key: "Enter",
     });
 
