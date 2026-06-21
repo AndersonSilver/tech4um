@@ -23,6 +23,10 @@ fi
 git fetch origin "${BRANCH}"
 git reset --hard "origin/${BRANCH}"
 
+# VPS com pouca CPU: build serial evita timeout e contenção entre backend/frontend.
+export COMPOSE_PARALLEL_LIMIT=1
+export DOCKER_BUILDKIT=1
+
 docker compose -f "${COMPOSE_FILE}" up -d --build --remove-orphans
 
 docker compose -f "${COMPOSE_FILE}" ps

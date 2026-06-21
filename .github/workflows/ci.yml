@@ -87,6 +87,7 @@ jobs:
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
           port: ${{ secrets.VPS_PORT || 22 }}
+          command_timeout: 45m
           script_stop: true
           script: |
             bash /opt/tech4um/deploy/remote-deploy.sh
