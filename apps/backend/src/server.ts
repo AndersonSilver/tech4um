@@ -15,6 +15,7 @@ import { generalRateLimiter } from "./middlewares/rateLimiters";
 import { ChatSocketHandler } from "./sockets/ChatSocketHandler";
 import { logger } from "./utils/logger";
 import { getUploadsDirectory } from "./utils/imageUpload";
+import { connectRedis } from "./config/redis";
 import { seedDemoDataIfNeeded } from "./services/DemoDataSeeder";
 
 const presetAvatarsDir = path.resolve(__dirname, "../assets/avatars");
@@ -57,6 +58,8 @@ async function bootstrap() {
 
   await AppDataSource.initialize();
   logger.info("📦 Conectado ao banco de dados");
+
+  await connectRedis();
 
   await seedDemoDataIfNeeded(AppDataSource);
 

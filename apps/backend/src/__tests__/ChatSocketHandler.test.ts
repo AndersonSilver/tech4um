@@ -6,6 +6,11 @@ import { ForumRepository } from "../repositories/ForumRepository";
 
 jest.mock("../services/MessageService");
 jest.mock("../services/MessageReactionService");
+jest.mock("../utils/TokenBlacklist", () => ({
+  tokenBlacklist: {
+    isRevoked: jest.fn().mockResolvedValue(false),
+  },
+}));
 
 describe("ChatSocketHandler", () => {
   let httpServer: ReturnType<typeof createServer>;
