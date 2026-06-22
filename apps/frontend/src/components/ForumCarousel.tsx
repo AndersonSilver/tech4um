@@ -15,7 +15,7 @@ export function ForumCarousel({ forums, activeForumId, onSelect }: ForumCarousel
   });
 
   return (
-    <div className="shrink-0 w-full lg:w-[180px] flex flex-col gap-2 min-h-0 lg:h-full">
+    <div className="shrink-0 w-full min-w-0 max-w-full lg:w-[180px] flex flex-col gap-2 min-h-0 lg:h-full">
       <div className="flex items-center justify-between lg:px-1">
         <span className="font-poppins text-[10px] font-semibold uppercase tracking-wide text-bordergray">
           Outras salas
@@ -25,7 +25,7 @@ export function ForumCarousel({ forums, activeForumId, onSelect }: ForumCarousel
         </span>
       </div>
 
-      <div className="flex lg:flex-col gap-2 w-full h-[104px] lg:h-auto lg:flex-1 lg:min-h-0 overflow-x-auto lg:overflow-x-hidden lg:overflow-y-auto pb-1 lg:pb-0 snap-x lg:snap-none [scrollbar-width:none] [&::-webkit-scrollbar]:hidden lg:[scrollbar-width:auto] lg:[&::-webkit-scrollbar]:auto">
+      <div className="flex lg:flex-col gap-2 w-full min-w-0 max-w-full h-[104px] lg:h-auto lg:flex-1 lg:min-h-0 overflow-x-auto lg:overflow-x-hidden lg:overflow-y-auto pb-1 lg:pb-0 snap-x lg:snap-none [scrollbar-width:none] [&::-webkit-scrollbar]:hidden lg:[scrollbar-width:auto] lg:[&::-webkit-scrollbar]:auto">
         {sorted.map((forum) => {
           const isActive = forum.id === activeForumId;
 

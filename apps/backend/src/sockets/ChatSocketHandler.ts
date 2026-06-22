@@ -141,9 +141,13 @@ export class ChatSocketHandler {
   }
 
   private broadcastPresenceUpdate(...forumIds: string[]) {
-    for (const forumId of new Set(forumIds)) {
-      this.io.emit(SOCKET_EVENTS.FORUM_PRESENCE_UPDATED, { forumId });
-    }
+    const uniqueForumIds = [...new Set(forumIds.filter(Boolean))];
+    if (uniqueForumIds.length === 0) return;
+
+    // Um único evento por transição de presença — evita rajadas de refetch no frontend.
+    this.io.emit(SOCKET_EVENTS.FORUM_PRESENCE_UPDATED, {
+      forumId: uniqueForumIds[uniqueForumIds.length - 1],
+    });
   }
 
   private async onJoinForum(socket: AuthenticatedSocket, forumId: string) {

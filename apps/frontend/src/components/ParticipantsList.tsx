@@ -217,7 +217,7 @@ export function ParticipantsList(props: ParticipantsListProps) {
         />
       )}
 
-      <aside className="fixed inset-x-0 bottom-0 z-40 max-h-[72dvh] rounded-t-card shadow-panel overflow-hidden animate-[slideUp_0.25s_ease-out] lg:static lg:z-auto lg:w-[250px] lg:max-h-none lg:h-full lg:rounded-card lg:shadow-panel lg:shrink-0 lg:flex lg:flex-col">
+      <aside className="fixed inset-x-0 bottom-0 z-40 max-h-[72dvh] rounded-t-card shadow-panel overflow-hidden animate-[slideUp_0.25s_ease-out] lg:static lg:z-auto lg:w-[250px] lg:max-h-none lg:min-h-0 lg:h-auto lg:self-stretch lg:rounded-card lg:shadow-panel lg:shrink-0 lg:flex lg:flex-col">
         <div className="lg:hidden flex justify-center pt-3 pb-1 bg-white shrink-0">
           <span className="h-1 w-10 rounded-full bg-bordergray/80" aria-hidden />
         </div>

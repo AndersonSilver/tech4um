@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Header } from "../components/Header";
 import { LoginModal } from "../components/LoginModal";
@@ -32,6 +32,7 @@ const CARD_LAYOUT_PATTERN: CardLayout[] = [
 ];
 
 const FORUM_REFRESH_MS = 20_000;
+const PRESENCE_REFRESH_MS = 800;
 
 function getCardLayout(index: number): CardLayout {
   return CARD_LAYOUT_PATTERN[index % CARD_LAYOUT_PATTERN.length];
@@ -48,6 +49,7 @@ export function Dashboard() {
   const [activityFilter, setActivityFilter] = useState<ForumActivityFilter>("all");
   const [showLogin, setShowLogin] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
+  const presenceRefreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     void loadForums();
@@ -62,11 +64,22 @@ export function Dashboard() {
     if (!socket) return;
 
     const refreshForums = () => {
-      void loadForums();
+      if (presenceRefreshTimerRef.current) {
+        clearTimeout(presenceRefreshTimerRef.current);
+      }
+
+      presenceRefreshTimerRef.current = setTimeout(() => {
+        void loadForums();
+        presenceRefreshTimerRef.current = null;
+      }, PRESENCE_REFRESH_MS);
     };
 
     socket.on(SOCKET_EVENTS.FORUM_PRESENCE_UPDATED, refreshForums);
     return () => {
+      if (presenceRefreshTimerRef.current) {
+        clearTimeout(presenceRefreshTimerRef.current);
+        presenceRefreshTimerRef.current = null;
+      }
       socket.off(SOCKET_EVENTS.FORUM_PRESENCE_UPDATED, refreshForums);
     };
   }, [socket]);

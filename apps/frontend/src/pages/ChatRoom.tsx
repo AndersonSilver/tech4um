@@ -13,6 +13,8 @@ import { SOCKET_EVENTS } from "@tech4um/shared";
 import { buildSenderProfileIndex } from "../utils/senderProfiles";
 
 const TYPING_HIDE_DELAY_MS = 1000;
+const PRESENCE_REFRESH_MS = 800;
+const JOIN_COOLDOWN_MS = 2000;
 
 function ParticipantsIcon() {
   return (
@@ -57,9 +59,15 @@ export function ChatRoom() {
   const [hasNewPrivateMessage, setHasNewPrivateMessage] = useState(false);
   const [isForumJoined, setIsForumJoined] = useState(false);
 
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesScrollRef = useRef<HTMLDivElement>(null);
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const httpJoinedForumRef = useRef<string | null>(null);
+  const socketJoinedForumRef = useRef<string | null>(null);
+  const joinCooldownUntilRef = useRef(0);
+  const isForumJoinedRef = useRef(false);
   const userIdRef = useRef(user?.id);
+  const forumIdRef = useRef(id);
 
   const loadForum = useCallback(async (forumId: string) => {
     const { data } = await api.get<Forum>(`/forums/${forumId}`);
@@ -84,19 +92,69 @@ export function ChatRoom() {
   }, [user?.id]);
 
   useEffect(() => {
+    forumIdRef.current = id;
+  }, [id]);
+
+  useEffect(() => {
+    isForumJoinedRef.current = isForumJoined;
+  }, [isForumJoined]);
+
+  useEffect(() => {
     loadForumRef.current = loadForum;
     loadAllForumsRef.current = loadAllForums;
   }, [loadForum, loadAllForums]);
 
+  const schedulePresenceRefresh = useCallback((refreshCurrentForum: boolean) => {
+    if (refreshTimerRef.current) {
+      clearTimeout(refreshTimerRef.current);
+    }
+
+    refreshTimerRef.current = setTimeout(() => {
+      void loadAllForumsRef.current();
+
+      const activeForumId = forumIdRef.current;
+      if (refreshCurrentForum && activeForumId) {
+        void loadForumRef.current(activeForumId);
+      }
+
+      refreshTimerRef.current = null;
+    }, PRESENCE_REFRESH_MS);
+  }, []);
+
+  const emitJoinForum = useCallback(
+    (force = false) => {
+      if (!socket || !id) return false;
+
+      const now = Date.now();
+      if (!force) {
+        if (isForumJoinedRef.current && socketJoinedForumRef.current === id) return false;
+        if (now < joinCooldownUntilRef.current) return false;
+      }
+
+      joinCooldownUntilRef.current = now + JOIN_COOLDOWN_MS;
+      socket.emit(SOCKET_EVENTS.JOIN_FORUM, { forumId: id });
+      return true;
+    },
+    [socket, id]
+  );
+
   useEffect(() => {
     if (isLoading || !isAuthenticated || !id) return;
+
     setMessages([]);
     setContent("");
     setPrivateTarget(null);
-    loadForum(id);
-    loadMessages(id);
+    setIsForumJoined(false);
+    socketJoinedForumRef.current = null;
+
+    void loadForum(id);
+    void loadMessages(id);
     void loadAllForums();
-    void api.post(`/forums/${id}/join`).catch(() => undefined);
+
+    if (httpJoinedForumRef.current !== id) {
+      httpJoinedForumRef.current = id;
+      void api.post(`/forums/${id}/join`).catch(() => undefined);
+    }
   }, [id, isLoading, isAuthenticated, loadForum, loadMessages, loadAllForums]);
 
   useEffect(() => {
@@ -104,28 +162,49 @@ export function ChatRoom() {
 
     let active = true;
     setIsForumJoined(false);
-
-    const joinForum = () => {
-      socket.emit(SOCKET_EVENTS.JOIN_FORUM, { forumId: id });
-    };
+    socketJoinedForumRef.current = null;
 
     const onForumJoined = ({ forumId }: { forumId: string }) => {
       if (!active || forumId !== id) return;
+      socketJoinedForumRef.current = forumId;
       setIsForumJoined(true);
-      void loadForumRef.current(id);
     };
 
-    joinForum();
+    const onConnect = () => {
+      socketJoinedForumRef.current = null;
+      setIsForumJoined(false);
+      emitJoinForum(true);
+    };
 
-    socket.on("connect", joinForum);
+    emitJoinForum(true);
+
+    socket.on("connect", onConnect);
     socket.on(SOCKET_EVENTS.FORUM_JOINED, onForumJoined);
 
+    const appendConfirmedMessage = (message: Message) => {
+      setMessages((prev) => {
+        const withoutPendingDuplicate = prev.filter(
+          (entry) =>
+            !entry.id.startsWith("pending:") ||
+            entry.senderId !== message.senderId ||
+            entry.content !== message.content ||
+            (entry.imageUrl ?? "") !== (message.imageUrl ?? "")
+        );
+
+        if (withoutPendingDuplicate.some((entry) => entry.id === message.id)) {
+          return withoutPendingDuplicate;
+        }
+
+        return [...withoutPendingDuplicate, message];
+      });
+    };
+
     socket.on(SOCKET_EVENTS.NEW_PUBLIC_MESSAGE, ({ message }: { message: Message }) => {
-      setMessages((prev) => [...prev, message]);
+      appendConfirmedMessage(message);
     });
 
     socket.on(SOCKET_EVENTS.NEW_PRIVATE_MESSAGE, ({ message }: { message: Message }) => {
-      setMessages((prev) => [...prev, message]);
+      appendConfirmedMessage(message);
       if (message.senderId !== userIdRef.current) {
         setHasNewPrivateMessage(true);
         setTimeout(() => setHasNewPrivateMessage(false), 4000);
@@ -149,16 +228,8 @@ export function ChatRoom() {
       }, TYPING_HIDE_DELAY_MS);
     });
 
-    socket.on(SOCKET_EVENTS.PARTICIPANT_ONLINE, () => {
-      void loadForumRef.current(id);
-    });
-    socket.on(SOCKET_EVENTS.PARTICIPANT_OFFLINE, () => {
-      void loadForumRef.current(id);
-    });
-
-    socket.on(SOCKET_EVENTS.FORUM_PRESENCE_UPDATED, () => {
-      void loadAllForumsRef.current();
-      void loadForumRef.current(id);
+    socket.on(SOCKET_EVENTS.FORUM_PRESENCE_UPDATED, ({ forumId }: { forumId: string }) => {
+      schedulePresenceRefresh(forumId === id);
     });
 
     socket.on(
@@ -181,41 +252,77 @@ export function ChatRoom() {
     return () => {
       active = false;
       setIsForumJoined(false);
+      socketJoinedForumRef.current = null;
+
+      if (refreshTimerRef.current) {
+        clearTimeout(refreshTimerRef.current);
+        refreshTimerRef.current = null;
+      }
 
       if (typingTimeoutRef.current) {
         clearTimeout(typingTimeoutRef.current);
         typingTimeoutRef.current = null;
       }
 
-      socket.off("connect", joinForum);
+      socket.off("connect", onConnect);
       socket.emit(SOCKET_EVENTS.LEAVE_FORUM, { forumId: id });
       socket.off(SOCKET_EVENTS.FORUM_JOINED, onForumJoined);
       socket.off(SOCKET_EVENTS.NEW_PUBLIC_MESSAGE);
       socket.off(SOCKET_EVENTS.NEW_PRIVATE_MESSAGE);
       socket.off(SOCKET_EVENTS.USER_TYPING);
-      socket.off(SOCKET_EVENTS.PARTICIPANT_OFFLINE);
-      socket.off(SOCKET_EVENTS.PARTICIPANT_ONLINE);
       socket.off(SOCKET_EVENTS.FORUM_PRESENCE_UPDATED);
       socket.off(SOCKET_EVENTS.SYSTEM_NOTICE);
       socket.off(SOCKET_EVENTS.MESSAGE_REACTION_UPDATED);
     };
-  }, [socket, id]);
+  }, [socket, id, emitJoinForum, schedulePresenceRefresh]);
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    const container = messagesScrollRef.current;
+    if (!container) return;
+    container.scrollTo({ top: container.scrollHeight, behavior: "smooth" });
   }, [messages]);
 
   function handleSend() {
     const text = content.trim();
-    if ((!text && !pendingImageUrl) || !socket || !id || isUploadingImage || !isForumJoined) return;
+    if ((!text && !pendingImageUrl) || !socket || !id || !user || isUploadingImage) return;
+
+    if (!isForumJoined) {
+      const requested = emitJoinForum();
+      showNotice(
+        requested
+          ? "Conectando à sala… aguarde um instante e envie novamente."
+          : "Conectando à sala… aguarde a conexão."
+      );
+      return;
+    }
+
+    const imageUrl = pendingImageUrl ?? undefined;
+    const isPrivate = Boolean(privateTarget);
+    const optimisticMessage: Message = {
+      id: `pending:${crypto.randomUUID()}`,
+      forumId: id,
+      content: text,
+      type: isPrivate ? "private" : "public",
+      senderId: user.id,
+      recipientId: privateTarget?.userId,
+      createdAt: new Date().toISOString(),
+      imageUrl,
+      sender: user ?? undefined,
+      recipient: privateTarget?.user,
+    };
+
+    setMessages((prev) => [...prev, optimisticMessage]);
+    setContent("");
+    setPendingImageUrl(null);
+    setPendingImagePreview(null);
 
     const payload = {
       forumId: id,
       content: text,
-      imageUrl: pendingImageUrl ?? undefined,
+      imageUrl,
     };
 
-    if (privateTarget) {
+    if (isPrivate && privateTarget) {
       socket.emit(SOCKET_EVENTS.SEND_PRIVATE_MESSAGE, {
         ...payload,
         recipientId: privateTarget.userId,
@@ -223,10 +330,6 @@ export function ChatRoom() {
     } else {
       socket.emit(SOCKET_EVENTS.SEND_PUBLIC_MESSAGE, payload);
     }
-
-    setContent("");
-    setPendingImageUrl(null);
-    setPendingImagePreview(null);
   }
 
   function showNotice(message: string) {
@@ -324,10 +427,12 @@ export function ChatRoom() {
   ).length;
 
   return (
-    <div className="h-[100dvh] bg-background page-fade-in flex flex-col overflow-hidden">
-      <Header />
+    <div className="h-[100dvh] min-w-0 max-w-full overflow-x-hidden bg-background page-fade-in flex flex-col overflow-hidden">
+      <div className="shrink-0">
+        <Header />
+      </div>
 
-      <main className="layout-page-x pt-3 sm:pt-6 pb-3 sm:pb-4 flex flex-col gap-3 min-h-0 flex-1">
+      <main className="layout-page-x pt-3 sm:pt-6 pb-3 sm:pb-4 flex flex-col gap-3 min-h-0 min-w-0 max-w-full flex-1 overflow-hidden">
         <div className="flex items-center justify-between gap-3 shrink-0">
           <button
             type="button"
@@ -358,13 +463,7 @@ export function ChatRoom() {
           </button>
         </div>
 
-        <div className="flex flex-col lg:flex-row gap-3 lg:gap-5 items-stretch lg:h-[819px] relative min-h-0 flex-1">
-          {systemNotice && (
-            <div className="absolute -top-10 left-1/2 -translate-x-1/2 bg-primary-dark text-background font-poppins text-xs px-4 py-2 rounded-full shadow-card z-10 animate-pulse">
-              {systemNotice}
-            </div>
-          )}
-
+        <div className="grid min-h-0 min-w-0 w-full max-w-full flex-1 grid-rows-[minmax(0,1fr)_auto] gap-3 overflow-hidden lg:flex lg:min-h-0 lg:flex-1 lg:flex-row lg:items-stretch lg:gap-5 relative">
           {showParticipants && (
             <ParticipantsList
               participants={forum.participants ?? []}
@@ -377,7 +476,7 @@ export function ChatRoom() {
             />
           )}
 
-          <section className="bg-white rounded-card shadow-panel flex-1 min-w-0 min-h-0 relative overflow-hidden flex flex-col order-2 lg:order-none">
+          <section className="bg-white rounded-card shadow-panel flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden order-2 lg:order-none">
             <header className="bg-white shadow-[0px_2px_4px_0px_rgba(0,0,0,0.08)] flex items-center justify-between px-4 sm:px-8 py-3 sm:py-5 shrink-0 gap-2">
               <div className="flex items-center gap-2 sm:gap-3 min-w-0">
                 <button
@@ -407,26 +506,40 @@ export function ChatRoom() {
               </div>
             </header>
 
-            <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden px-4 sm:px-8 py-4 sm:py-6 flex flex-col gap-4 sm:gap-6 bg-white">
-              {messages
-                .filter(
-                  (m) =>
-                    m.type === "public" ||
-                    m.senderId === user?.id ||
-                    m.recipientId === user?.id
-                )
-                .map((message) => (
-                  <MessageBubble
-                    key={message.id}
-                    message={message}
-                    isOwn={message.senderId === user?.id}
-                    senderName={resolveSenderName(message)}
-                    senderAvatarUrl={senderProfiles.get(message.senderId)?.avatarUrl}
-                    currentUserId={user?.id}
-                    onReact={handleReact}
-                  />
-                ))}
-              <div ref={messagesEndRef} />
+            {systemNotice && (
+              <div
+                role="status"
+                aria-live="polite"
+                className="shrink-0 mx-4 sm:mx-8 py-2 px-4 rounded-full bg-primary-dark text-background font-poppins text-xs text-center shadow-card"
+              >
+                {systemNotice}
+              </div>
+            )}
+
+            <div
+              ref={messagesScrollRef}
+              className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-y-contain px-4 sm:px-8 py-4 sm:py-6 bg-white"
+            >
+              <div className="flex flex-col gap-4 sm:gap-6">
+                {messages
+                  .filter(
+                    (m) =>
+                      m.type === "public" ||
+                      m.senderId === user?.id ||
+                      m.recipientId === user?.id
+                  )
+                  .map((message) => (
+                    <MessageBubble
+                      key={message.id}
+                      message={message}
+                      isOwn={message.senderId === user?.id}
+                      senderName={resolveSenderName(message)}
+                      senderAvatarUrl={senderProfiles.get(message.senderId)?.avatarUrl}
+                      currentUserId={user?.id}
+                      onReact={handleReact}
+                    />
+                  ))}
+              </div>
             </div>
 
             {typingUser && (
@@ -441,23 +554,26 @@ export function ChatRoom() {
               </p>
             )}
 
-            <ChatMessageComposer
-              content={content}
-              isPrivateMode={isPrivateMode}
-              recipientName={privateTarget?.user?.username}
-              pendingImageUrl={pendingImagePreview}
-              isUploading={isUploadingImage || !isForumJoined}
-              onContentChange={setContent}
-              onTyping={handleTyping}
-              onSend={handleSend}
-              onCancelPrivate={() => setPrivateTarget(null)}
-              onImageSelected={handleImageSelected}
-              onImageRejected={showNotice}
-              onRemovePendingImage={handleRemovePendingImage}
-            />
+            <div className="min-w-0 w-full shrink-0">
+              <ChatMessageComposer
+                content={content}
+                isPrivateMode={isPrivateMode}
+                recipientName={privateTarget?.user?.username}
+                pendingImageUrl={pendingImagePreview}
+                isUploading={isUploadingImage}
+                canSend={isForumJoined && !isUploadingImage}
+                onContentChange={setContent}
+                onTyping={handleTyping}
+                onSend={handleSend}
+                onCancelPrivate={() => setPrivateTarget(null)}
+                onImageSelected={handleImageSelected}
+                onImageRejected={showNotice}
+                onRemovePendingImage={handleRemovePendingImage}
+              />
+            </div>
           </section>
 
-          <div className="order-3 lg:order-none shrink-0 lg:self-stretch min-h-0">
+          <div className="order-3 lg:order-none min-w-0 w-full max-w-full overflow-hidden shrink-0 min-h-0 lg:self-stretch lg:flex-1 lg:max-w-[180px]">
             <ForumCarousel
               forums={allForums}
               activeForumId={forum.id}

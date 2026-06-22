@@ -50,7 +50,7 @@ export function MessageBubble({
   const justifyText = Boolean(message.content && !emojiOnly && shouldJustifyMessage(message.content));
 
   return (
-    <div className={`flex w-full min-w-0 overflow-hidden ${isOwn ? "justify-end" : "justify-start"}`}>
+    <div className={`flex w-full min-w-0 shrink-0 overflow-hidden ${isOwn ? "justify-end" : "justify-start"}`}>
       <div
         className={`flex gap-3 items-start max-w-[80%] min-w-0 ${
           isOwn ? "flex-row-reverse" : "flex-row"

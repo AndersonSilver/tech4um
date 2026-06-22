@@ -55,6 +55,7 @@ interface ChatMessageComposerProps {
   recipientName?: string;
   pendingImageUrl: string | null;
   isUploading: boolean;
+  canSend?: boolean;
   onContentChange: (value: string) => void;
   onTyping: () => void;
   onSend: () => void;
@@ -70,6 +71,7 @@ export function ChatMessageComposer({
   recipientName,
   pendingImageUrl,
   isUploading,
+  canSend = true,
   onContentChange,
   onTyping,
   onSend,
@@ -116,15 +118,17 @@ export function ChatMessageComposer({
     event.target.value = "";
   }
 
+  const sendDisabled = isUploading || !canSend;
+
   return (
     <div
-      className={`rounded-b-card flex flex-col gap-2 px-4 sm:px-8 pt-3 pb-5 shrink-0 transition-colors ${
+      className={`rounded-b-card flex w-full min-w-0 max-w-full flex-col gap-2 px-4 sm:px-8 pt-3 pb-5 shrink-0 overflow-hidden transition-colors ${
         isPrivateMode ? "bg-secondary-dark" : "bg-primary-dark"
       }`}
     >
-      <div className="flex items-start justify-between w-full gap-3 min-w-0">
-        <div className="min-w-0 flex flex-col gap-1">
-          <p className="font-poppins font-bold text-[10px] text-background m-0">
+      <div className="grid w-full min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-2">
+        <div className="min-w-0">
+          <p className="font-poppins font-bold text-[10px] text-background m-0 truncate">
             {isPrivateMode && recipientName
               ? `Enviando para ${recipientName}`
               : "Enviando para todos do 4um"}
@@ -133,14 +137,14 @@ export function ChatMessageComposer({
             <button
               type="button"
               onClick={onCancelPrivate}
-              className="font-poppins text-[10px] text-background/90 underline border-0 bg-transparent cursor-pointer p-0 text-left w-fit"
+              className="font-poppins text-[10px] text-background/90 underline border-0 bg-transparent cursor-pointer p-0 text-left w-fit max-w-full truncate"
             >
               Cancelar mensagem privada
             </button>
           )}
         </div>
 
-        <div className="flex items-center gap-3 shrink-0 relative">
+        <div className="flex items-center gap-2 shrink-0 relative">
           <button
             type="button"
             aria-label="Abrir emojis"
@@ -195,7 +199,7 @@ export function ChatMessageComposer({
         </div>
       )}
 
-      <div className="relative w-full">
+      <div className="relative w-full min-w-0">
         <input
           ref={inputRef}
           value={content}
@@ -203,16 +207,18 @@ export function ChatMessageComposer({
             onContentChange(e.target.value);
             onTyping();
           }}
-          onKeyDown={(e) => e.key === "Enter" && onSend()}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && !sendDisabled) onSend();
+          }}
           placeholder="Escreva aqui uma mensagem maneira para mandar para os colegas..."
-          className="w-full h-12 rounded-full bg-white pl-6 pr-14 outline-none font-poppins font-light text-xs text-textgray placeholder:text-bordergray"
+          className="box-border w-full min-w-0 h-12 rounded-full bg-white pl-6 pr-14 outline-none font-poppins font-light text-xs text-textgray placeholder:text-bordergray"
         />
         <button
           type="button"
           onClick={onSend}
-          disabled={isUploading}
+          disabled={sendDisabled}
           aria-label="Enviar mensagem"
-          className={`absolute right-1.5 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full flex items-center justify-center text-background border-0 cursor-pointer hover:brightness-110 transition-all disabled:opacity-50 ${
+          className={`absolute right-1.5 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full flex items-center justify-center text-background border-0 cursor-pointer hover:brightness-110 transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
             isPrivateMode ? "bg-black" : "bg-primary-dark"
           }`}
         >
