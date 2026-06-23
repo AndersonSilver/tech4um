@@ -2,13 +2,11 @@ import { createContext, useContext, useState, useEffect, ReactNode } from "react
 import { api } from "../services/api";
 import { User } from "../types";
 
-type LoginResult = { mfaRequired: true; mfaToken: string } | { mfaRequired: false };
-
 interface AuthContextData {
   user: User | null;
   isAuthenticated: boolean;
   isLoading: boolean;
-  login: (email: string, password: string, captchaToken: string) => Promise<LoginResult>;
+  login: (email: string, password: string, captchaToken: string) => Promise<void>;
   register: (
     username: string,
     email: string,
@@ -16,7 +14,6 @@ interface AuthContextData {
     captchaToken: string
   ) => Promise<void>;
   loginWithGoogle: (code: string) => Promise<void>;
-  verifyMfa: (mfaToken: string, code: string) => Promise<void>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
 }
@@ -49,19 +46,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await restoreSession();
   }
 
-  async function login(email: string, password: string, captchaToken: string): Promise<LoginResult> {
+  async function login(email: string, password: string, captchaToken: string) {
     const { data } = await api.post("/auth/login", { email, password, captchaToken });
-
-    if (data.mfaRequired) {
-      return { mfaRequired: true, mfaToken: data.mfaToken };
-    }
-
-    setUser(data.user);
-    return { mfaRequired: false };
-  }
-
-  async function verifyMfa(mfaToken: string, code: string) {
-    const { data } = await api.post("/auth/mfa/verify", { mfaToken, code });
     setUser(data.user);
   }
 
@@ -100,7 +86,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         login,
         register,
         loginWithGoogle,
-        verifyMfa,
         logout,
         refreshUser,
       }}

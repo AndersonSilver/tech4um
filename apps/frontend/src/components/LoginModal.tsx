@@ -67,7 +67,7 @@ function ErrorMessage({ message }: { message: string }) {
 }
 
 export function LoginModal({ onClose, onSuccess }: LoginModalProps) {
-  const { login, register, verifyMfa } = useAuth();
+  const { login, register } = useAuth();
   const [mode, setMode] = useState<Mode>("login");
 
   const [username, setUsername] = useState("");
@@ -75,9 +75,6 @@ export function LoginModal({ onClose, onSuccess }: LoginModalProps) {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-
-  const [mfaToken, setMfaToken] = useState<string | null>(null);
-  const [mfaCode, setMfaCode] = useState("");
 
   function switchMode(nextMode: Mode) {
     setMode(nextMode);
@@ -93,12 +90,8 @@ export function LoginModal({ onClose, onSuccess }: LoginModalProps) {
       const captchaToken = await executeRecaptcha(mode === "login" ? "login" : "register");
 
       if (mode === "login") {
-        const result = await login(email, password, captchaToken);
-        if (result.mfaRequired) {
-          setMfaToken(result.mfaToken);
-        } else {
-          onSuccess();
-        }
+        await login(email, password, captchaToken);
+        onSuccess();
       } else {
         await register(username, email, password, captchaToken);
         onSuccess();
@@ -118,73 +111,6 @@ export function LoginModal({ onClose, onSuccess }: LoginModalProps) {
     } finally {
       setLoading(false);
     }
-  }
-
-  async function handleVerifyMfa(e: FormEvent) {
-    e.preventDefault();
-    if (!mfaToken) return;
-
-    setError("");
-    setLoading(true);
-    try {
-      await verifyMfa(mfaToken, mfaCode);
-      onSuccess();
-    } catch {
-      setError("Código de verificação inválido.");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  if (mfaToken) {
-    return (
-      <ModalBackdrop>
-        <form onSubmit={handleVerifyMfa} className="flex flex-col">
-          <div className="border-b border-background px-8 pb-5 pt-8">
-            <h2 className="m-0 font-poppins text-[22px] font-bold leading-tight text-primary-default">
-              Verificação em duas etapas
-            </h2>
-            <p className="m-0 mt-2 font-poppins text-sm leading-relaxed text-textgray">
-              Digite o código de 6 dígitos do seu app autenticador.
-            </p>
-          </div>
-
-          <div className="flex flex-col gap-5 px-8 py-6">
-            <label className="block w-full">
-              <FieldLabel>Código de verificação</FieldLabel>
-              <input
-                value={mfaCode}
-                onChange={(e) => setMfaCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
-                placeholder="000000"
-                maxLength={6}
-                autoFocus
-                className={`${inputClassName} text-center text-2xl tracking-[0.3em]`}
-              />
-            </label>
-
-            {error && <ErrorMessage message={error} />}
-
-            <button
-              type="submit"
-              disabled={loading || mfaCode.length !== 6}
-              className="flex h-11 w-full items-center justify-center rounded-button bg-primary-dark px-4 disabled:opacity-60"
-            >
-              <span className="font-poppins text-base font-semibold text-background">
-                {loading ? "Verificando..." : "Confirmar"}
-              </span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setMfaToken(null)}
-              className="font-poppins text-sm text-textgray transition-colors hover:text-primary-dark"
-            >
-              Voltar ao login
-            </button>
-          </div>
-        </form>
-      </ModalBackdrop>
-    );
   }
 
   return (

@@ -65,23 +65,6 @@ export class UserRepository {
     });
   }
 
-  // ---------- MFA ----------
-
-  async setPendingMfaSecret(userId: string, encryptedSecret: string) {
-    await this.repo.update(userId, { mfaSecretEncrypted: encryptedSecret });
-  }
-
-  async enableMfa(userId: string) {
-    await this.repo.update(userId, { mfaEnabled: true });
-  }
-
-  async disableMfa(userId: string) {
-    await this.repo.update(userId, {
-      mfaEnabled: false,
-      mfaSecretEncrypted: null as unknown as undefined,
-    });
-  }
-
   // Reservado para uma futura rotina de limpeza (cron) de tokens de verificação
   // expirados — não é estritamente necessário hoje (o filtro por expiresAt já
   // impede reuso), mas evita acúmulo de lixo na coluna ao longo do tempo.

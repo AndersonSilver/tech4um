@@ -8,12 +8,6 @@ export interface TokenPayload {
   exp?: number; // timestamp unix de expiração (preenchido automaticamente pelo jwt)
 }
 
-export interface MfaPendingPayload {
-  sub: string;
-  type: "mfa_pending";
-  exp?: number;
-}
-
 export class TokenService {
   private static getSecret(): string {
     const secret = process.env.JWT_SECRET;
@@ -54,24 +48,5 @@ export class TokenService {
   static decodeUnsafe(token: string): TokenPayload | null {
     const decoded = jwt.decode(token);
     return (decoded as TokenPayload) ?? null;
-  }
-
-  /**
-   * Token de curtíssima duração (5 min) emitido após senha correta quando a
-   * conta tem MFA habilitado. Tem um `type` próprio para que nunca possa ser
-   * confundido/aceito como um token de sessão completo pelo `authMiddleware`.
-   */
-  static signMfaPending(userId: string): string {
-    return jwt.sign({ sub: userId, type: "mfa_pending" }, this.getSecret(), {
-      expiresIn: "5m",
-    });
-  }
-
-  static verifyMfaPending(token: string): MfaPendingPayload {
-    const payload = jwt.verify(token, this.getSecret()) as MfaPendingPayload;
-    if (payload.type !== "mfa_pending") {
-      throw new Error("Token não é um token de MFA pendente válido.");
-    }
-    return payload;
   }
 }

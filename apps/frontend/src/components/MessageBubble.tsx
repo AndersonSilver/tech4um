@@ -50,7 +50,7 @@ export function MessageBubble({
   const justifyText = Boolean(message.content && !emojiOnly && shouldJustifyMessage(message.content));
 
   return (
-    <div className={`flex w-full min-w-0 shrink-0 overflow-hidden ${isOwn ? "justify-end" : "justify-start"}`}>
+    <div className={`flex w-full min-w-0 shrink-0 overflow-x-hidden ${isOwn ? "justify-end" : "justify-start"}`}>
       <div
         className={`flex gap-3 items-start max-w-[80%] min-w-0 ${
           isOwn ? "flex-row-reverse" : "flex-row"
@@ -72,8 +72,8 @@ export function MessageBubble({
           }`}
         >
           <div
-            className={`relative flex items-center gap-2 ${
-              isOwn ? "flex-row-reverse pl-8" : "pr-8"
+            className={`flex items-center gap-2 min-h-7 ${
+              isOwn ? "flex-row-reverse" : ""
             }`}
           >
             <span className="font-poppins font-semibold text-sm text-textgray">{displayName}</span>

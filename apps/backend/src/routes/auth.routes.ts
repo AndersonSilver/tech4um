@@ -17,10 +17,4 @@ router.patch("/profile/avatar", authMiddleware, controller.updateAvatar);
 router.get("/verify-email", controller.verifyEmail);
 router.post("/resend-verification", authRateLimiter, controller.resendVerification);
 
-// MFA
-router.post("/mfa/setup", authMiddleware, controller.mfaSetup);
-router.post("/mfa/enable", authMiddleware, controller.mfaEnable);
-router.post("/mfa/disable", authMiddleware, controller.mfaDisable);
-router.post("/mfa/verify", authRateLimiter, controller.mfaVerify);
-
 export default router;

@@ -8,6 +8,7 @@ import {
   TypingPayload,
   LeaveForumPayload,
   ReactToMessagePayload,
+  SetForumPresencePayload,
 } from "@tech4um/shared";
 import { TokenService } from "../utils/TokenService";
 import { tokenBlacklist } from "../utils/TokenBlacklist";
@@ -115,6 +116,9 @@ export class ChatSocketHandler {
     );
     socket.on(SOCKET_EVENTS.REACT_TO_MESSAGE, (payload: ReactToMessagePayload) =>
       this.onReactToMessage(socket, payload)
+    );
+    socket.on(SOCKET_EVENTS.SET_FORUM_PRESENCE, (payload: SetForumPresencePayload) =>
+      this.onSetForumPresence(socket, payload)
     );
     socket.on("disconnect", () => {
       clearInterval(revalidationTimer);
@@ -350,6 +354,33 @@ export class ChatSocketHandler {
       const message = error instanceof Error ? error.message : "Não foi possível reagir à mensagem.";
       socket.emit(SOCKET_EVENTS.SYSTEM_NOTICE, { message });
     }
+  }
+
+  private async onSetForumPresence(
+    socket: AuthenticatedSocket,
+    payload: SetForumPresencePayload
+  ) {
+    if (!socket.userId || !payload?.forumId || typeof payload.isOnline !== "boolean") return;
+    if (!socket.rooms.has(payload.forumId)) return;
+
+    await this.forumRepository.setOnlineStatus(
+      payload.forumId,
+      socket.userId,
+      payload.isOnline
+    );
+
+    if (payload.isOnline) {
+      this.io.to(payload.forumId).emit(SOCKET_EVENTS.PARTICIPANT_ONLINE, {
+        userId: socket.userId,
+        username: socket.username,
+      });
+    } else {
+      this.io.to(payload.forumId).emit(SOCKET_EVENTS.PARTICIPANT_OFFLINE, {
+        userId: socket.userId,
+      });
+    }
+
+    this.broadcastPresenceUpdate(payload.forumId);
   }
 
   private async onLeaveForum(socket: AuthenticatedSocket, forumId: string) {

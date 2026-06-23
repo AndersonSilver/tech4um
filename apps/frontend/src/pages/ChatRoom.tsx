@@ -121,6 +121,25 @@ export function ChatRoom() {
     }, PRESENCE_REFRESH_MS);
   }, []);
 
+  const emitForumPresence = useCallback(
+    (isOnline: boolean) => {
+      if (!socket || !id || !isForumJoinedRef.current) return;
+      socket.emit(SOCKET_EVENTS.SET_FORUM_PRESENCE, { forumId: id, isOnline });
+    },
+    [socket, id]
+  );
+
+  const updateParticipantPresence = useCallback((userId: string, isOnline: boolean) => {
+    setForum((prev) => {
+      if (!prev?.participants) return prev;
+      return {
+        ...prev,
+        participants: prev.participants.map((participant) =>
+          participant.userId === userId ? { ...participant, isOnline } : participant
+        ),
+      };
+    });
+  }, []);
   const emitJoinForum = useCallback(
     (force = false) => {
       if (!socket || !id) return false;
@@ -167,7 +186,9 @@ export function ChatRoom() {
     const onForumJoined = ({ forumId }: { forumId: string }) => {
       if (!active || forumId !== id) return;
       socketJoinedForumRef.current = forumId;
+      isForumJoinedRef.current = true;
       setIsForumJoined(true);
+      emitForumPresence(!document.hidden);
     };
 
     const onConnect = () => {
@@ -232,6 +253,14 @@ export function ChatRoom() {
       schedulePresenceRefresh(forumId === id);
     });
 
+    socket.on(SOCKET_EVENTS.PARTICIPANT_ONLINE, ({ userId }: { userId: string }) => {
+      updateParticipantPresence(userId, true);
+    });
+
+    socket.on(SOCKET_EVENTS.PARTICIPANT_OFFLINE, ({ userId }: { userId: string }) => {
+      updateParticipantPresence(userId, false);
+    });
+
     socket.on(
       SOCKET_EVENTS.MESSAGE_REACTION_UPDATED,
       ({
@@ -271,10 +300,23 @@ export function ChatRoom() {
       socket.off(SOCKET_EVENTS.NEW_PRIVATE_MESSAGE);
       socket.off(SOCKET_EVENTS.USER_TYPING);
       socket.off(SOCKET_EVENTS.FORUM_PRESENCE_UPDATED);
+      socket.off(SOCKET_EVENTS.PARTICIPANT_ONLINE);
+      socket.off(SOCKET_EVENTS.PARTICIPANT_OFFLINE);
       socket.off(SOCKET_EVENTS.SYSTEM_NOTICE);
       socket.off(SOCKET_EVENTS.MESSAGE_REACTION_UPDATED);
     };
-  }, [socket, id, emitJoinForum, schedulePresenceRefresh]);
+  }, [socket, id, emitJoinForum, emitForumPresence, schedulePresenceRefresh, updateParticipantPresence]);
+
+  useEffect(() => {
+    if (!socket || !id) return;
+
+    const onVisibilityChange = () => {
+      emitForumPresence(!document.hidden);
+    };
+
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => document.removeEventListener("visibilitychange", onVisibilityChange);
+  }, [socket, id, emitForumPresence]);
 
   useEffect(() => {
     const container = messagesScrollRef.current;
@@ -423,7 +465,7 @@ export function ChatRoom() {
   const isPrivateMode = Boolean(privateTarget);
 
   const onlineParticipantCount = (forum.participants ?? []).filter(
-    (participant) => participant.isOnline || participant.userId === user?.id
+    (participant) => participant.isOnline
   ).length;
 
   return (

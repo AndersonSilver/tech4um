@@ -23,7 +23,7 @@ const presetAvatarsDir = path.resolve(__dirname, "../assets/avatars");
 dotenv.config();
 
 function assertRequiredEnv() {
-  const required = ["JWT_SECRET", "DB_HOST", "DB_USER", "DB_PASSWORD", "DB_NAME", "ENCRYPTION_KEY"];
+  const required = ["JWT_SECRET", "DB_HOST", "DB_USER", "DB_PASSWORD", "DB_NAME"];
   const missing = required.filter((key) => !process.env[key]);
 
   if (missing.length > 0) {
@@ -46,10 +46,6 @@ function assertRequiredEnv() {
 
   if (process.env.JWT_SECRET && process.env.JWT_SECRET.length < 16) {
     throw new Error("JWT_SECRET muito curto — use no mínimo 16 caracteres aleatórios.");
-  }
-
-  if (process.env.ENCRYPTION_KEY && process.env.ENCRYPTION_KEY.length < 16) {
-    throw new Error("ENCRYPTION_KEY muito curto — use no mínimo 16 caracteres aleatórios.");
   }
 }
 

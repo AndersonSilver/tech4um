@@ -26,14 +26,9 @@ function ChatBubbleIcon() {
   );
 }
 
-function sortParticipants(
-  participants: ForumParticipant[],
-  currentUserId?: string
-): ForumParticipant[] {
+function sortParticipants(participants: ForumParticipant[]): ForumParticipant[] {
   return [...participants].sort((a, b) => {
-    const aOnline = a.userId === currentUserId || a.isOnline;
-    const bOnline = b.userId === currentUserId || b.isOnline;
-    if (aOnline !== bOnline) return aOnline ? -1 : 1;
+    if (a.isOnline !== b.isOnline) return a.isOnline ? -1 : 1;
 
     const aName = a.user?.username ?? "";
     const bName = b.user?.username ?? "";
@@ -58,7 +53,7 @@ function ParticipantRow({
   const username = participant.user?.username ?? "Usuário";
   const isSelf = participant.userId === currentUserId;
   const avatarSrc = resolveAvatarUrl(participant.user?.avatarUrl);
-  const isOnline = participant.userId === currentUserId || participant.isOnline;
+  const isOnline = participant.isOnline;
 
   return (
     <button
@@ -124,19 +119,17 @@ function ParticipantsPanel({
 }: ParticipantsListProps) {
   const [query, setQuery] = useState("");
 
-  const onlineCount = participants.filter(
-    (participant) => participant.isOnline || participant.userId === currentUserId
-  ).length;
+  const onlineCount = participants.filter((participant) => participant.isOnline).length;
 
   const filtered = useMemo(() => {
-    const sorted = sortParticipants(participants, currentUserId);
+    const sorted = sortParticipants(participants);
     const normalizedQuery = query.trim().toLowerCase();
     if (!normalizedQuery) return sorted;
 
     return sorted.filter((participant) =>
       (participant.user?.username ?? "").toLowerCase().includes(normalizedQuery)
     );
-  }, [participants, currentUserId, query]);
+  }, [participants, query]);
 
   return (
     <div className="flex flex-col h-full min-h-0 bg-white">

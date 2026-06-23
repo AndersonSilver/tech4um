@@ -108,7 +108,7 @@ Desative o seed automático com `SEED_DEMO_DATA=false` em `apps/backend/.env`.
 ## Stack completa com Docker (produção / demo)
 
 ```bash
-# .env na raiz com JWT_SECRET, ENCRYPTION_KEY, DB_PASSWORD, REDIS_PASSWORD, etc.
+# .env na raiz com JWT_SECRET, DB_PASSWORD, REDIS_PASSWORD, etc.
 docker compose up -d --build
 ```
 
@@ -207,10 +207,8 @@ Após uma avaliação interna (simulando o que um pentest básico cobriria), os 
 - **CAPTCHA anti-bot** — Google reCAPTCHA v3 no cadastro e login (token invisível no frontend, verificação via `siteverify` no backend).
 - **Verificação de e-mail** — no cadastro é enviado um link (token aleatório de 32 bytes, do qual guardamos apenas o hash SHA-256, com expiração de 24h) via SMTP/`nodemailer`. Criar fórum exige e-mail verificado. Há reenvio de link com resposta genérica anti-enumeração.
 - **Blacklist de tokens distribuída** — migrada de memória para **Redis** com TTL igual ao tempo restante do token. Um logout agora se propaga entre todas as instâncias do backend.
-- **MFA (2FA via TOTP)** — compatível com Google Authenticator/Authy/1Password. O segredo é criptografado em repouso (AES-256-GCM via `ENCRYPTION_KEY`), o setup exige confirmação de um código válido antes de ativar, e o login passa a ter uma segunda etapa (`/auth/mfa/verify`) com token intermediário de 5 min.
 
 ### Limitações que permanecem
-- **Recovery codes de MFA** — hoje, se o usuário perder o dispositivo autenticador, a recuperação precisa ser manual (suporte). Um conjunto de códigos de backup seria o próximo passo.
 - **Verificação de e-mail não é obrigatória para login** — apenas para ações sensíveis (criar fórum). Decisão de produto para não travar o acesso por um e-mail que pode não ter chegado.
 - **WAF / proteção de borda** — fica a cargo da infraestrutura (ex.: Cloudflare na frente do VPS).
 

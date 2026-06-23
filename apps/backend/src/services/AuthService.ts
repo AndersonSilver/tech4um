@@ -9,7 +9,6 @@ import type {
   RegisterRequestDTO,
   LoginRequestDTO,
   AuthResponseDTO,
-  LoginResponseDTO,
 } from "@tech4um/shared";
 import { User } from "../entities/User";
 import type { GoogleProfile } from "../utils/GoogleTokenVerifier";
@@ -55,18 +54,12 @@ export class AuthService {
     return { user: user.toPublic(), token };
   }
 
-  async login(input: Omit<LoginRequestDTO, "captchaToken">): Promise<LoginResponseDTO> {
+  async login(input: Omit<LoginRequestDTO, "captchaToken">): Promise<AuthResponseDTO> {
     const user = await this.userRepository.findByEmail(input.email);
     if (!user || !user.passwordHash) throw new AppError("Credenciais inválidas", 401);
 
     const passwordMatches = await PasswordHasher.compare(input.password, user.passwordHash);
     if (!passwordMatches) throw new AppError("Credenciais inválidas", 401);
-
-    if (user.mfaEnabled) {
-      // Não emite sessão ainda — o client precisa completar o segundo fator
-      // em POST /auth/mfa/verify usando este token de curta duração.
-      return { mfaRequired: true, mfaToken: TokenService.signMfaPending(user.id) };
-    }
 
     const token = TokenService.sign({ sub: user.id, username: user.username });
     return { user: user.toPublic(), token };
@@ -103,9 +96,7 @@ export class AuthService {
       user = await this.syncGoogleProfile(user, profile);
     }
 
-    // Login via Google não passa pelo MFA: a posse da conta Google já é, em si,
-    // um segundo fator. (Decisão de produto documentada — times mais rígidos
-    // podem optar por exigir MFA aqui também.)
+    // Login via Google: a posse da conta Google já valida o acesso.
     const token = TokenService.sign({ sub: user.id, username: user.username });
     return { user: user.toPublic(), token };
   }

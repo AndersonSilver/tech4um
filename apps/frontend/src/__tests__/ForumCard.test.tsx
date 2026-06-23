@@ -20,7 +20,6 @@ const forum: Forum = {
         username: "Lara",
         email: "lara@email.com",
         isEmailVerified: true,
-        mfaEnabled: false,
       },
     },
     {
@@ -32,7 +31,6 @@ const forum: Forum = {
         username: "João",
         email: "joao@email.com",
         isEmailVerified: true,
-        mfaEnabled: false,
       },
     },
   ],

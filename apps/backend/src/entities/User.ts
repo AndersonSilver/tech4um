@@ -41,14 +41,6 @@ export class User {
   @Column({ name: "email_verification_expires_at", type: "timestamp", nullable: true })
   emailVerificationExpiresAt?: Date;
 
-  // ---------- MFA (TOTP) ----------
-  @Column({ name: "mfa_enabled", default: false })
-  mfaEnabled!: boolean;
-
-  // Segredo TOTP criptografado em repouso (AES-256-GCM) — nunca fica em texto puro no banco.
-  @Column({ name: "mfa_secret_encrypted", nullable: true })
-  mfaSecretEncrypted?: string;
-
   @CreateDateColumn({ name: "created_at" })
   createdAt!: Date;
 
@@ -65,7 +57,6 @@ export class User {
       email: this.email,
       avatarUrl: this.avatarUrl,
       isEmailVerified: this.isEmailVerified,
-      mfaEnabled: this.mfaEnabled,
     };
   }
 }

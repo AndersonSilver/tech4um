@@ -1,9 +1,7 @@
 import { AuthController } from "../controllers/AuthController";
 import { AuthService } from "../services/AuthService";
-import { MfaService } from "../services/MfaService";
 import { CaptchaVerifier } from "../services/CaptchaVerifier";
 import { resolveUserIdFromRequest } from "../middlewares/authMiddleware";
-import { TokenService } from "../utils/TokenService";
 import { tokenBlacklist } from "../utils/TokenBlacklist";
 import { setAuthCookie, clearAuthCookie } from "../utils/authCookie";
 import { AppError } from "../utils/AppError";
@@ -31,7 +29,6 @@ function buildUser(overrides: Partial<User> = {}): User {
   user.id = "user-1";
   user.username = "lara";
   user.email = "lara@email.com";
-  user.mfaEnabled = false;
   user.isEmailVerified = true;
   Object.assign(user, overrides);
   return user;
@@ -50,10 +47,7 @@ describe("AuthController", () => {
   const resolveUserId = resolveUserIdFromRequest as jest.Mock;
   const revokeToken = tokenBlacklist.revoke as jest.Mock;
 
-  function buildController(
-    authOverrides: Partial<AuthService> = {},
-    mfaOverrides: Partial<MfaService> = {}
-  ) {
+  function buildController(authOverrides: Partial<AuthService> = {}) {
     const authService = {
       register: jest.fn(),
       login: jest.fn(),
@@ -65,18 +59,9 @@ describe("AuthController", () => {
       ...authOverrides,
     } as unknown as AuthService;
 
-    const mfaService = {
-      setup: jest.fn(),
-      enable: jest.fn(),
-      disable: jest.fn(),
-      verifyCode: jest.fn(),
-      ...mfaOverrides,
-    } as unknown as MfaService;
-
     return {
-      controller: new AuthController(authService, mfaService),
+      controller: new AuthController(authService),
       authService,
-      mfaService,
     };
   }
 
@@ -124,7 +109,7 @@ describe("AuthController", () => {
     expect(setAuthCookie).not.toHaveBeenCalled();
   });
 
-  it("login() retorna usuário e cookie quando MFA não é exigido", async () => {
+  it("login() retorna usuário e cookie de sessão", async () => {
     const publicUser = buildUser().toPublic();
     const { controller } = buildController({
       login: jest.fn().mockResolvedValue({ user: publicUser, token: "jwt-token" }),
@@ -142,24 +127,6 @@ describe("AuthController", () => {
     expect(setAuthCookie).toHaveBeenCalledWith(res, "jwt-token");
     expect(res.status).toHaveBeenCalledWith(200);
     expect(res.json).toHaveBeenCalledWith({ user: publicUser });
-  });
-
-  it("login() retorna mfaRequired sem definir cookie de sessão", async () => {
-    const { controller } = buildController({
-      login: jest.fn().mockResolvedValue({ mfaRequired: true, mfaToken: "mfa-token" }),
-    });
-
-    const req = {
-      body: { email: "lara@email.com", password: "Senha123", captchaToken: "captcha" },
-      ip: "127.0.0.1",
-    } as any;
-    const res = buildResponse();
-    const next = jest.fn();
-
-    await controller.login(req, res as any, next);
-
-    expect(setAuthCookie).not.toHaveBeenCalled();
-    expect(res.json).toHaveBeenCalledWith({ mfaRequired: true, mfaToken: "mfa-token" });
   });
 
   it("google() retorna usuário autenticado via OAuth", async () => {
@@ -283,102 +250,5 @@ describe("AuthController", () => {
 
     expect(authService.resendVerificationEmail).toHaveBeenCalledWith("lara@email.com");
     expect(res.status).toHaveBeenCalledWith(200);
-  });
-
-  it("mfaSetup() retorna QR code e secret", async () => {
-    const setup = { qrCodeDataUrl: "data:image/png;base64,abc", secret: "SECRET" };
-    const { controller, authService, mfaService } = buildController(
-      { getProfile: jest.fn().mockResolvedValue(buildUser().toPublic()) },
-      { setup: jest.fn().mockResolvedValue(setup) }
-    );
-
-    const req = { userId: "user-1" } as any;
-    const res = buildResponse();
-    const next = jest.fn();
-
-    await controller.mfaSetup(req, res as any, next);
-
-    expect(authService.getProfile).toHaveBeenCalledWith("user-1");
-    expect(mfaService.setup).toHaveBeenCalledWith("user-1", "lara@email.com");
-    expect(res.json).toHaveBeenCalledWith(setup);
-  });
-
-  it("mfaEnable() habilita MFA com código válido", async () => {
-    const { controller, mfaService } = buildController({}, {
-      enable: jest.fn().mockResolvedValue(undefined),
-    });
-
-    const req = { userId: "user-1", body: { code: "123456" } } as any;
-    const res = buildResponse();
-    const next = jest.fn();
-
-    await controller.mfaEnable(req, res as any, next);
-
-    expect(mfaService.enable).toHaveBeenCalledWith("user-1", "123456");
-    expect(res.status).toHaveBeenCalledWith(200);
-  });
-
-  it("mfaDisable() desabilita MFA", async () => {
-    const { controller, mfaService } = buildController({}, {
-      disable: jest.fn().mockResolvedValue(undefined),
-    });
-
-    const req = { userId: "user-1", body: { code: "654321" } } as any;
-    const res = buildResponse();
-    const next = jest.fn();
-
-    await controller.mfaDisable(req, res as any, next);
-
-    expect(mfaService.disable).toHaveBeenCalledWith("user-1", "654321");
-    expect(res.status).toHaveBeenCalledWith(200);
-  });
-
-  it("mfaVerify() rejeita token MFA inválido", async () => {
-    const { controller } = buildController();
-    const req = { body: { mfaToken: "token-invalido-jwt", code: "123456" } } as any;
-    const res = buildResponse();
-    const next = jest.fn();
-
-    await controller.mfaVerify(req, res as any, next);
-
-    expect(next).toHaveBeenCalledWith(expect.any(AppError));
-    expect((next.mock.calls[0][0] as AppError).statusCode).toBe(401);
-  });
-
-  it("mfaVerify() completa login com código TOTP válido", async () => {
-    const publicUser = buildUser().toPublic();
-    const mfaToken = TokenService.signMfaPending("user-1");
-
-    const { controller, mfaService, authService } = buildController(
-      { getProfile: jest.fn().mockResolvedValue(publicUser) },
-      { verifyCode: jest.fn().mockResolvedValue(true) }
-    );
-
-    const req = { body: { mfaToken, code: "123456" } } as any;
-    const res = buildResponse();
-    const next = jest.fn();
-
-    await controller.mfaVerify(req, res as any, next);
-
-    expect(mfaService.verifyCode).toHaveBeenCalledWith("user-1", "123456");
-    expect(authService.getProfile).toHaveBeenCalledWith("user-1");
-    expect(setAuthCookie).toHaveBeenCalled();
-    expect(res.json).toHaveBeenCalledWith({ user: publicUser });
-  });
-
-  it("mfaVerify() rejeita código TOTP inválido", async () => {
-    const mfaToken = TokenService.signMfaPending("user-1");
-    const { controller } = buildController({}, {
-      verifyCode: jest.fn().mockResolvedValue(false),
-    });
-
-    const req = { body: { mfaToken, code: "000000" } } as any;
-    const res = buildResponse();
-    const next = jest.fn();
-
-    await controller.mfaVerify(req, res as any, next);
-
-    expect(next).toHaveBeenCalledWith(expect.any(AppError));
-    expect((next.mock.calls[0][0] as AppError).statusCode).toBe(400);
   });
 });

@@ -54,7 +54,6 @@ Preencha **todos** os campos. Gere segredos:
 
 ```bash
 openssl rand -hex 32   # JWT_SECRET
-openssl rand -hex 32   # ENCRYPTION_KEY
 openssl rand -hex 16   # DB_PASSWORD
 openssl rand -hex 16   # REDIS_PASSWORD
 ```

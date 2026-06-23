@@ -58,9 +58,7 @@ export function MessageReactionBar({ isOwn, onReact }: MessageReactionBarProps) 
   return (
     <div
       ref={containerRef}
-      className={`absolute top-1/2 -translate-y-1/2 z-10 ${
-        isOwn ? "left-0" : "right-0"
-      } transition-opacity ${
+      className={`relative shrink-0 z-10 transition-opacity ${
         showPicker
           ? "opacity-100 pointer-events-auto"
           : "opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto"

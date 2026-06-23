@@ -13,7 +13,6 @@ const participants: ForumParticipant[] = [
       username: "Lara",
       email: "lara@email.com",
       isEmailVerified: true,
-      mfaEnabled: false,
     },
   },
   {
@@ -25,7 +24,6 @@ const participants: ForumParticipant[] = [
       username: "Lucas",
       email: "lucas@email.com",
       isEmailVerified: true,
-      mfaEnabled: false,
     },
   },
 ];
@@ -60,7 +58,7 @@ describe("ParticipantsList", () => {
     expect(onSelectParticipant).toHaveBeenCalledWith(participants[1]);
   });
 
-  it("marca o usuário atual como online mesmo quando isOnline é false", () => {
+  it("mostra indicador online apenas quando isOnline é true", () => {
     render(
       <ParticipantsList
         participants={participants}
@@ -70,7 +68,10 @@ describe("ParticipantsList", () => {
     );
 
     const laraRow = screen.getByText("Lara").closest("button");
-    expect(laraRow?.querySelector(".bg-green-500")).toBeTruthy();
+    expect(laraRow?.querySelector(".bg-green-500")).toBeFalsy();
+
+    const lucasRow = screen.getByText("Lucas").closest("button");
+    expect(lucasRow?.querySelector(".bg-green-500")).toBeTruthy();
   });
 
   it("destaca participante ativo para mensagem privada", () => {

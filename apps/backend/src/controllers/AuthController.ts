@@ -1,19 +1,14 @@
 import { Request, Response, NextFunction } from "express";
 import { z } from "zod";
 import { AuthService } from "../services/AuthService";
-import { MfaService } from "../services/MfaService";
 import { CaptchaVerifier } from "../services/CaptchaVerifier";
 import { resolveUserIdFromRequest } from "../middlewares/authMiddleware";
-import { TokenService } from "../utils/TokenService";
 import { tokenBlacklist } from "../utils/TokenBlacklist";
 import { setAuthCookie, clearAuthCookie } from "../utils/authCookie";
 import { AppError } from "../utils/AppError";
 import type {
   RegisterRequestDTO,
   LoginRequestDTO,
-  EnableMfaRequestDTO,
-  DisableMfaRequestDTO,
-  VerifyMfaRequestDTO,
   UpdateAvatarRequestDTO,
 } from "@tech4um/shared";
 import { PRESET_AVATAR_IDS } from "@tech4um/shared";
@@ -44,19 +39,6 @@ const googleLoginSchema = z.object({
   redirectUri: z.string().url(),
 });
 
-const verifyMfaSchema: z.ZodType<VerifyMfaRequestDTO> = z.object({
-  mfaToken: z.string().min(10),
-  code: z.string().length(6),
-});
-
-const enableMfaSchema: z.ZodType<EnableMfaRequestDTO> = z.object({
-  code: z.string().length(6),
-});
-
-const disableMfaSchema: z.ZodType<DisableMfaRequestDTO> = z.object({
-  code: z.string().length(6),
-});
-
 const resendVerificationSchema = z.object({ email: z.string().email() });
 const verifyEmailSchema = z.object({ token: z.string().min(10) });
 
@@ -70,10 +52,7 @@ const updateAvatarSchema: z.ZodType<UpdateAvatarRequestDTO> = z
   });
 
 export class AuthController {
-  constructor(
-    private authService: AuthService = new AuthService(),
-    private mfaService: MfaService = new MfaService()
-  ) {}
+  constructor(private authService: AuthService = new AuthService()) {}
 
   register = async (req: Request, res: Response, next: NextFunction) => {
     try {
@@ -93,14 +72,9 @@ export class AuthController {
       const data = loginSchema.parse(req.body);
       await CaptchaVerifier.verify(data.captchaToken, req.ip, "login");
 
-      const result = await this.authService.login(data);
-
-      if ("mfaRequired" in result) {
-        return res.status(200).json(result);
-      }
-
-      setAuthCookie(res, result.token);
-      return res.status(200).json({ user: result.user });
+      const { user, token } = await this.authService.login(data);
+      setAuthCookie(res, token);
+      return res.status(200).json({ user });
     } catch (error) {
       next(error);
     }
@@ -181,67 +155,6 @@ export class AuthController {
       return res
         .status(200)
         .json({ message: "Se o e-mail existir e não estiver verificado, enviamos um novo link." });
-    } catch (error) {
-      next(error);
-    }
-  };
-
-  // ---------- MFA ----------
-
-  mfaSetup = async (req: Request, res: Response, next: NextFunction) => {
-    try {
-      const userId = (req as any).userId as string;
-      const profile = await this.authService.getProfile(userId);
-      const setup = await this.mfaService.setup(userId, profile.email);
-      return res.status(200).json(setup);
-    } catch (error) {
-      next(error);
-    }
-  };
-
-  mfaEnable = async (req: Request, res: Response, next: NextFunction) => {
-    try {
-      const userId = (req as any).userId as string;
-      const { code } = enableMfaSchema.parse(req.body);
-      await this.mfaService.enable(userId, code);
-      return res.status(200).json({ message: "MFA habilitado com sucesso." });
-    } catch (error) {
-      next(error);
-    }
-  };
-
-  mfaDisable = async (req: Request, res: Response, next: NextFunction) => {
-    try {
-      const userId = (req as any).userId as string;
-      const { code } = disableMfaSchema.parse(req.body);
-      await this.mfaService.disable(userId, code);
-      return res.status(200).json({ message: "MFA desabilitado." });
-    } catch (error) {
-      next(error);
-    }
-  };
-
-  // Completa o login quando a conta tem MFA habilitado (segunda etapa).
-  mfaVerify = async (req: Request, res: Response, next: NextFunction) => {
-    try {
-      const { mfaToken, code } = verifyMfaSchema.parse(req.body);
-
-      let userId: string;
-      try {
-        const payload = TokenService.verifyMfaPending(mfaToken);
-        userId = payload.sub;
-      } catch {
-        throw new AppError("Sessão de login expirada. Faça login novamente.", 401);
-      }
-
-      const isValid = await this.mfaService.verifyCode(userId, code);
-      if (!isValid) throw new AppError("Código inválido.", 400);
-
-      const profile = await this.authService.getProfile(userId);
-      const token = TokenService.sign({ sub: userId, username: profile.username });
-
-      setAuthCookie(res, token);
-      return res.status(200).json({ user: profile });
     } catch (error) {
       next(error);
     }

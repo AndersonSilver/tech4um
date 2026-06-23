@@ -1,19 +1,25 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from "react";
+import { createPortal } from "react-dom";
 import {
   EMOJI_CATEGORIES,
   loadRecentEmojis,
   saveRecentEmoji,
 } from "../data/chatEmojis";
 
+const PICKER_WIDTH = 320;
+const PICKER_MARGIN = 8;
+
 interface EmojiPickerProps {
+  anchorRef: RefObject<HTMLElement | null>;
   onSelect: (emoji: string) => void;
   onClose: () => void;
 }
 
-export function EmojiPicker({ onSelect, onClose }: EmojiPickerProps) {
+export function EmojiPicker({ anchorRef, onSelect, onClose }: EmojiPickerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [activeCategory, setActiveCategory] = useState("recent");
   const [recentEmojis, setRecentEmojis] = useState<string[]>(() => loadRecentEmojis());
+  const [position, setPosition] = useState<{ top: number; left: number } | null>(null);
 
   const categories = useMemo(() => {
     if (recentEmojis.length === 0) {
@@ -36,6 +42,30 @@ export function EmojiPicker({ onSelect, onClose }: EmojiPickerProps) {
     categories[0]?.emojis ??
     [];
 
+  useLayoutEffect(() => {
+    function updatePosition() {
+      const anchor = anchorRef.current;
+      if (!anchor) return;
+
+      const rect = anchor.getBoundingClientRect();
+      const left = Math.min(
+        Math.max(PICKER_MARGIN, rect.right - PICKER_WIDTH),
+        window.innerWidth - PICKER_WIDTH - PICKER_MARGIN
+      );
+
+      setPosition({ top: rect.top - PICKER_MARGIN, left });
+    }
+
+    updatePosition();
+    window.addEventListener("resize", updatePosition);
+    window.addEventListener("scroll", updatePosition, true);
+
+    return () => {
+      window.removeEventListener("resize", updatePosition);
+      window.removeEventListener("scroll", updatePosition, true);
+    };
+  }, [anchorRef]);
+
   useEffect(() => {
     if (recentEmojis.length === 0 && activeCategory === "recent") {
       setActiveCategory(EMOJI_CATEGORIES[0].id);
@@ -44,9 +74,10 @@ export function EmojiPicker({ onSelect, onClose }: EmojiPickerProps) {
 
   useEffect(() => {
     function handlePointerDown(event: MouseEvent) {
-      if (!containerRef.current?.contains(event.target as Node)) {
-        onClose();
-      }
+      const target = event.target as Node;
+      if (containerRef.current?.contains(target)) return;
+      if (anchorRef.current?.contains(target)) return;
+      onClose();
     }
 
     function handleKeyDown(event: KeyboardEvent) {
@@ -62,7 +93,7 @@ export function EmojiPicker({ onSelect, onClose }: EmojiPickerProps) {
       document.removeEventListener("mousedown", handlePointerDown);
       window.removeEventListener("keydown", handleKeyDown);
     };
-  }, [onClose]);
+  }, [anchorRef, onClose]);
 
   function handleEmojiClick(emoji: string) {
     saveRecentEmoji(emoji);
@@ -70,10 +101,13 @@ export function EmojiPicker({ onSelect, onClose }: EmojiPickerProps) {
     onSelect(emoji);
   }
 
-  return (
+  if (!position) return null;
+
+  return createPortal(
     <div
       ref={containerRef}
-      className="absolute right-0 bottom-full mb-2 z-30 w-[320px] rounded-compact bg-white shadow-panel border border-bordergray overflow-hidden"
+      className="fixed z-[120] w-[320px] -translate-y-full rounded-compact bg-white shadow-panel border border-bordergray overflow-hidden"
+      style={{ top: position.top, left: position.left }}
       role="dialog"
       aria-label="Seletor de emojis"
     >
@@ -119,6 +153,7 @@ export function EmojiPicker({ onSelect, onClose }: EmojiPickerProps) {
           </button>
         ))}
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

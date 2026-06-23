@@ -29,7 +29,6 @@ function buildFakeUser(overrides: Partial<User> = {}): User {
   user.username = "lara";
   user.email = "lara@email.com";
   user.passwordHash = "$2b$10$hashedpasswordvalue1234567890123456789012";
-  user.mfaEnabled = false;
   user.isEmailVerified = false;
   Object.assign(user, overrides);
   return user;
@@ -113,21 +112,6 @@ describe("AuthService", () => {
     await expect(
       service.login({ email: "lara@email.com", password: "qualquer" })
     ).rejects.toThrow("Credenciais inválidas");
-  });
-
-  it("login() exige MFA quando a conta tem segundo fator habilitado", async () => {
-    const user = buildFakeUser({ mfaEnabled: true });
-    jest.spyOn(PasswordHasher, "compare").mockResolvedValue(true);
-
-    const { service } = buildService({
-      findByEmail: jest.fn().mockResolvedValue(user),
-    } as any);
-
-    const result = await service.login({ email: "lara@email.com", password: "Senha123" });
-
-    expect(result).toEqual(
-      expect.objectContaining({ mfaRequired: true, mfaToken: expect.any(String) })
-    );
   });
 
   it("verifyEmail() marca e-mail como verificado com token válido", async () => {

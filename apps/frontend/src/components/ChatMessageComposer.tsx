@@ -83,6 +83,7 @@ export function ChatMessageComposer({
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const emojiButtonRef = useRef<HTMLButtonElement>(null);
 
   function insertEmoji(emoji: string) {
     const input = inputRef.current;
@@ -122,7 +123,7 @@ export function ChatMessageComposer({
 
   return (
     <div
-      className={`rounded-b-card flex w-full min-w-0 max-w-full flex-col gap-2 px-4 sm:px-8 pt-3 pb-5 shrink-0 overflow-hidden transition-colors ${
+      className={`rounded-b-card flex w-full min-w-0 max-w-full flex-col gap-2 px-4 sm:px-8 pt-3 pb-5 shrink-0 transition-colors ${
         isPrivateMode ? "bg-secondary-dark" : "bg-primary-dark"
       }`}
     >
@@ -146,6 +147,7 @@ export function ChatMessageComposer({
 
         <div className="flex items-center gap-2 shrink-0 relative">
           <button
+            ref={emojiButtonRef}
             type="button"
             aria-label="Abrir emojis"
             onClick={() => setShowEmojiPicker((open) => !open)}
@@ -156,6 +158,7 @@ export function ChatMessageComposer({
 
           {showEmojiPicker && (
             <EmojiPicker
+              anchorRef={emojiButtonRef}
               onSelect={insertEmoji}
               onClose={() => setShowEmojiPicker(false)}
             />

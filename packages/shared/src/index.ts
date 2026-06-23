@@ -8,7 +8,6 @@ export interface PublicUser {
   email: string;
   avatarUrl?: string;
   isEmailVerified: boolean;
-  mfaEnabled: boolean;
 }
 
 export interface Forum {
@@ -84,33 +83,6 @@ export interface AuthResponseDTO {
   token: string;
 }
 
-// Resposta de login quando MFA está habilitado: nenhuma sessão é criada ainda,
-// o client precisa completar o segundo fator em /auth/mfa/verify.
-export interface MfaRequiredResponseDTO {
-  mfaRequired: true;
-  mfaToken: string;
-}
-
-export type LoginResponseDTO = AuthResponseDTO | MfaRequiredResponseDTO;
-
-export interface VerifyMfaRequestDTO {
-  mfaToken: string;
-  code: string;
-}
-
-export interface MfaSetupResponseDTO {
-  qrCodeDataUrl: string;
-  secret: string;
-}
-
-export interface EnableMfaRequestDTO {
-  code: string;
-}
-
-export interface DisableMfaRequestDTO {
-  code: string;
-}
-
 export interface PresetAvatar {
   id: string;
   label: string;
@@ -183,6 +155,11 @@ export interface ReactToMessagePayload {
   emoji: string;
 }
 
+export interface SetForumPresencePayload {
+  forumId: string;
+  isOnline: boolean;
+}
+
 // ---------- Eventos de WebSocket (server -> client) ----------
 
 export interface ForumJoinedPayload {
@@ -224,6 +201,7 @@ export const SOCKET_EVENTS = {
   TYPING: "typing",
   LEAVE_FORUM: "leave_forum",
   REACT_TO_MESSAGE: "react_to_message",
+  SET_FORUM_PRESENCE: "set_forum_presence",
   // server -> client
   FORUM_JOINED: "forum_joined",
   NEW_PUBLIC_MESSAGE: "new_public_message",
