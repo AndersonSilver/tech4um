@@ -1,5 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { ChatMessageReaction, QUICK_REACTION_EMOJIS } from "@tech4um/shared";
+
+const MENU_MARGIN = 8;
+const MENU_ESTIMATED_WIDTH = 260;
+const MENU_ESTIMATED_HEIGHT = 40;
 
 function SmileIcon() {
   return (
@@ -19,20 +24,65 @@ function SmileIcon() {
 
 interface MessageReactionBarProps {
   isOwn: boolean;
+  highlighted?: boolean;
   onReact: (emoji: string) => void;
 }
 
-export function MessageReactionBar({ isOwn, onReact }: MessageReactionBarProps) {
+export function MessageReactionBar({ isOwn, highlighted = false, onReact }: MessageReactionBarProps) {
   const [showPicker, setShowPicker] = useState(false);
-  const containerRef = useRef<HTMLDivElement>(null);
+  const [position, setPosition] = useState<{ top: number; left: number } | null>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useLayoutEffect(() => {
+    if (!showPicker) {
+      setPosition(null);
+      return;
+    }
+
+    function updatePosition() {
+      const anchor = buttonRef.current;
+      const menu = menuRef.current;
+      if (!anchor) return;
+
+      const rect = anchor.getBoundingClientRect();
+      const menuWidth = menu?.offsetWidth ?? MENU_ESTIMATED_WIDTH;
+      const menuHeight = menu?.offsetHeight ?? MENU_ESTIMATED_HEIGHT;
+
+      let top = rect.bottom + 6;
+      if (top + menuHeight > window.innerHeight - MENU_MARGIN) {
+        top = rect.top - menuHeight - 6;
+      }
+
+      let left = isOwn ? rect.right - menuWidth : rect.left;
+      left = Math.min(
+        Math.max(MENU_MARGIN, left),
+        window.innerWidth - menuWidth - MENU_MARGIN
+      );
+
+      setPosition({ top, left });
+    }
+
+    updatePosition();
+    const frame = requestAnimationFrame(updatePosition);
+    window.addEventListener("resize", updatePosition);
+    window.addEventListener("scroll", updatePosition, true);
+
+    return () => {
+      cancelAnimationFrame(frame);
+      window.removeEventListener("resize", updatePosition);
+      window.removeEventListener("scroll", updatePosition, true);
+    };
+  }, [showPicker, isOwn]);
 
   useEffect(() => {
     if (!showPicker) return;
 
     function handlePointerDown(event: MouseEvent) {
-      if (!containerRef.current?.contains(event.target as Node)) {
-        setShowPicker(false);
-      }
+      const target = event.target as Node;
+      if (menuRef.current?.contains(target)) return;
+      if (buttonRef.current?.contains(target)) return;
+      setShowPicker(false);
     }
 
     function handleKeyDown(event: KeyboardEvent) {
@@ -55,18 +105,25 @@ export function MessageReactionBar({ isOwn, onReact }: MessageReactionBarProps) 
     setShowPicker(false);
   }
 
+  const isVisible = showPicker || highlighted;
+
   return (
     <div
-      ref={containerRef}
-      className={`relative shrink-0 z-10 transition-opacity ${
-        showPicker
+      className={`absolute top-1/2 -translate-y-1/2 z-10 shrink-0 transition-opacity ${
+        isOwn ? "left-0" : "right-0"
+      } ${
+        isVisible
           ? "opacity-100 pointer-events-auto"
           : "opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto"
       }`}
     >
       <button
+        ref={buttonRef}
         type="button"
-        onClick={() => setShowPicker((open) => !open)}
+        onClick={(event) => {
+          event.stopPropagation();
+          setShowPicker((open) => !open);
+        }}
         className={`h-7 w-7 rounded-full border border-bordergray bg-white text-textgray shadow-sm flex items-center justify-center cursor-pointer hover:bg-surface hover:text-primary-dark transition-colors ${
           showPicker ? "bg-surface text-primary-dark" : ""
         }`}
@@ -76,27 +133,30 @@ export function MessageReactionBar({ isOwn, onReact }: MessageReactionBarProps) 
         <SmileIcon />
       </button>
 
-      {showPicker && (
-        <div
-          className={`absolute top-full mt-1.5 z-20 flex items-center gap-0.5 rounded-full border border-bordergray bg-white px-1.5 py-1 shadow-panel whitespace-nowrap ${
-            isOwn ? "right-0" : "left-0"
-          }`}
-          role="menu"
-          aria-label="Escolher reação"
-        >
-          {QUICK_REACTION_EMOJIS.map((emoji) => (
-            <button
-              key={emoji}
-              type="button"
-              onClick={() => handleReact(emoji)}
-              className="text-base leading-none border-0 bg-transparent p-1 cursor-pointer rounded-full hover:bg-surface transition-colors"
-              aria-label={`Reagir com ${emoji}`}
-            >
-              {emoji}
-            </button>
-          ))}
-        </div>
-      )}
+      {showPicker &&
+        position &&
+        createPortal(
+          <div
+            ref={menuRef}
+            className="fixed z-[120] flex items-center gap-0.5 rounded-full border border-bordergray bg-white px-1.5 py-1 shadow-panel whitespace-nowrap"
+            style={{ top: position.top, left: position.left }}
+            role="menu"
+            aria-label="Escolher reação"
+          >
+            {QUICK_REACTION_EMOJIS.map((emoji) => (
+              <button
+                key={emoji}
+                type="button"
+                onClick={() => handleReact(emoji)}
+                className="text-base leading-none border-0 bg-transparent p-1 cursor-pointer rounded-full hover:bg-surface transition-colors"
+                aria-label={`Reagir com ${emoji}`}
+              >
+                {emoji}
+              </button>
+            ))}
+          </div>,
+          document.body
+        )}
     </div>
   );
 }

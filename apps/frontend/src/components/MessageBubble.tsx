@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Message } from "../types";
 import { resolveMessageImageUrl } from "./ChatMessageComposer";
 import { resolveAvatarUrl, getUserInitial } from "../utils/resolveAvatarUrl";
@@ -33,6 +33,21 @@ export function MessageBubble({
   onReact,
 }: MessageBubbleProps) {
   const [isImageExpanded, setIsImageExpanded] = useState(false);
+  const [isHighlighted, setIsHighlighted] = useState(false);
+  const bubbleRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!isHighlighted) return;
+
+    function handlePointerDown(event: PointerEvent) {
+      if (!bubbleRef.current?.contains(event.target as Node)) {
+        setIsHighlighted(false);
+      }
+    }
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    return () => document.removeEventListener("pointerdown", handlePointerDown);
+  }, [isHighlighted]);
 
   const time = new Date(message.createdAt).toLocaleTimeString("pt-BR", {
     hour: "2-digit",
@@ -67,19 +82,25 @@ export function MessageBubble({
         </div>
 
         <div
+          ref={bubbleRef}
           className={`relative group flex flex-col gap-1 min-w-0 max-w-full ${
             isOwn ? "items-end" : "items-start"
           }`}
+          onClick={(event) => {
+            if ((event.target as HTMLElement).closest("button, a")) return;
+            setIsHighlighted((open) => !open);
+          }}
         >
           <div
-            className={`flex items-center gap-2 min-h-7 ${
-              isOwn ? "flex-row-reverse" : ""
+            className={`relative flex items-center gap-2 min-h-7 ${
+              isOwn ? "flex-row-reverse pl-8" : "pr-8"
             }`}
           >
             <span className="font-poppins font-semibold text-sm text-textgray">{displayName}</span>
             <span className="font-poppins text-[10px] text-bordergray">{time}</span>
             <MessageReactionBar
               isOwn={isOwn}
+              highlighted={isHighlighted}
               onReact={(emoji) => onReact(message.id, emoji)}
             />
           </div>
