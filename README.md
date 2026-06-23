@@ -4,40 +4,150 @@
 
 Fórum de conversas em tempo real. Monorepo gerenciado com **Turborepo** + **pnpm workspaces**.
 
+**Produção:** https://tech4um.webcycle.com.br
+
 ## Stack
 
-- **Backend:** Node.js, TypeScript (POO), Express, TypeORM, PostgreSQL, Socket.IO
+- **Backend:** Node.js, TypeScript (POO), Express, TypeORM, PostgreSQL, Socket.IO, Redis
 - **Frontend:** React + Vite + TypeScript + Tailwind (design 1:1 com o Figma via Figma MCP)
 - **Shared:** pacote `@tech4um/shared` com tipos, DTOs e contratos de eventos de WebSocket compartilhados entre backend e frontend
 - **Monorepo:** Turborepo + pnpm
-- **CI:** GitHub Actions (lint, typecheck, testes e build em cada push/PR)
+- **CI/CD:** GitHub Actions (lint, typecheck, testes, build e deploy na VPS)
 
-## Estrutura
+## Arquitetura
+
+```mermaid
+flowchart TB
+  subgraph browser["Navegador"]
+    FE["Frontend React (Vite :5173)"]
+  end
+
+  subgraph backend["Backend Node (Express :3333)"]
+    API["REST /api"]
+    WS["Socket.IO (chat em tempo real)"]
+  end
+
+  subgraph data["Dados"]
+    PG[("PostgreSQL")]
+    RD[("Redis")]
+  end
+
+  PKG["@tech4um/shared\n(tipos e eventos)"]
+
+  FE -->|"HTTP /api (proxy Vite em dev)"| API
+  FE -->|"WebSocket /socket.io"| WS
+  API --> PG
+  WS --> PG
+  API --> RD
+  WS --> RD
+  PKG -.-> FE
+  PKG -.-> API
+```
+
+| Camada | Responsabilidade |
+|--------|------------------|
+| **Frontend** | Dashboard de salas, chat, login, configurações de perfil |
+| **REST API** | Autenticação, CRUD de fóruns, mensagens, upload de imagens |
+| **Socket.IO** | Mensagens públicas/privadas, presença online, digitação, reações |
+| **PostgreSQL** | Usuários, fóruns, participantes, mensagens e reações |
+| **Redis** | Blacklist de tokens após logout (sessão revogada entre instâncias) |
+| **Shared** | Contrato único de tipos (`User`, `Forum`, `Message`) e eventos de socket |
+
+Em **desenvolvimento**, o Vite faz proxy de `/api` e `/socket.io` para o backend — o cookie `httpOnly` de autenticação funciona na mesma origem (`localhost:5173`).
+
+## Estrutura do repositório
 
 ```
 tech4um/
 ├── apps/
-│   ├── backend/     # API REST + WebSocket
-│   └── frontend/     # SPA React
+│   ├── backend/          # API REST + WebSocket + entidades TypeORM
+│   └── frontend/         # SPA React (Vite)
 ├── packages/
-│   └── shared/        # Tipos, DTOs e eventos de socket compartilhados (fonte única de verdade)
+│   └── shared/           # Tipos, DTOs e eventos de socket (fonte única)
+├── deploy/               # Scripts e guia de deploy na VPS
+├── scripts/dev.sh        # Sobe infra Docker + turbo dev
+├── docker-compose.infra.yml   # Postgres + Redis (dev local)
+├── docker-compose.yml         # Stack completa (demo/prod local)
+├── docker-compose.prod.yml    # Produção na VPS
 ├── .github/workflows/ci.yml
 ├── turbo.json
-├── pnpm-workspace.yaml
 └── package.json
 ```
 
-> `packages/shared` evita duplicar interfaces (`User`, `Forum`, `Message`, eventos de socket) entre backend e frontend — qualquer mudança no contrato de dados é feita em um único lugar.
+> `packages/shared` evita duplicar interfaces entre backend e frontend — qualquer mudança no contrato de dados é feita em um único lugar.
+
+## Baixar o projeto
+
+```bash
+git clone https://github.com/AndersonSilver/tech4um.git
+cd tech4um
+```
+
+Se você recebeu o projeto em um `.zip`, extraia e entre na pasta `tech4um` antes dos próximos passos.
 
 ## Desenvolvimento local (recomendado)
 
-Fluxo híbrido profissional: **Postgres + Redis no Docker** (dados persistentes) e **app local** com hot reload.
+Fluxo híbrido profissional: **Postgres + Redis no Docker/Podman** (dados persistentes) e **app local** com hot reload.
 
 ### Pré-requisitos
 
-- Node.js 20+
-- pnpm (`npm i -g pnpm`)
-- Docker + Docker Compose
+| Ferramenta | Versão | Verificar |
+|------------|--------|-----------|
+| Node.js | 20+ | `node -v` |
+| pnpm | 9.x (fixado no projeto) | `pnpm -v` |
+| Docker **ou** Podman + Compose | qualquer recente | `docker compose version` |
+
+> **Importante:** os três itens acima precisam funcionar **antes** de rodar `pnpm dev`. Veja a instalação detalhada abaixo se algum comando não for encontrado.
+
+#### Instalar o pnpm (versão 9)
+
+O projeto exige **pnpm 9** (`packageManager` no `package.json`).
+
+**Opção A — Corepack (recomendado, vem com o Node):**
+
+```bash
+corepack enable
+corepack prepare pnpm@9.0.0 --activate
+pnpm -v   # deve mostrar 9.x
+```
+
+**Opção B — npm global (Linux, sem `sudo`):**
+
+```bash
+npm install -g pnpm@9.0.0 --prefix "$HOME/.local"
+export PATH="$HOME/.local/bin:$PATH"   # adicione ao ~/.bashrc para persistir
+pnpm -v
+```
+
+**Opção C — npm global (com permissão de administrador):**
+
+```bash
+npm install -g pnpm@9.0.0
+```
+
+#### Docker ou Podman (infraestrutura)
+
+O script `pnpm dev` usa `docker compose` para subir Postgres e Redis.
+
+**Docker Engine (Ubuntu, Debian, etc.):**
+
+```bash
+# Instale Docker + plugin Compose conforme a documentação oficial
+docker compose version
+```
+
+**Fedora / RHEL (Podman — comum vir pré-instalado):**
+
+O Podman sozinho **não** expõe o comando `docker`. Instale o emulador e o plugin de Compose:
+
+```bash
+sudo dnf install -y podman-docker docker-compose
+systemctl --user enable --now podman.socket
+docker compose version   # deve responder (mensagem "Emulate Docker CLI using podman" é normal)
+```
+
+> Após reiniciar o PC no Fedora, se o compose falhar com `podman.sock: no such file`, rode:
+> `systemctl --user start podman.socket`
 
 ### 1. Instalar dependências
 
@@ -45,7 +155,9 @@ Fluxo híbrido profissional: **Postgres + Redis no Docker** (dados persistentes)
 pnpm install
 ```
 
-### 2. Configurar variáveis de ambiente
+### 2. Configurar variáveis de ambiente (obrigatório)
+
+Copie **os três** arquivos — o `pnpm dev` só cria o `.env` da raiz automaticamente; **backend e frontend precisam ser copiados manualmente**:
 
 ```bash
 cp .env.example .env
@@ -53,9 +165,47 @@ cp apps/backend/.env.example apps/backend/.env
 cp apps/frontend/.env.example apps/frontend/.env
 ```
 
-Preencha `apps/backend/.env` e `apps/frontend/.env` (Google OAuth, reCAPTCHA, SMTP etc.).
+**Mínimo para rodar em dev:** gere um `JWT_SECRET` forte no backend:
+
+```bash
+# Linux/macOS — cole o resultado em JWT_SECRET dentro de apps/backend/.env
+openssl rand -hex 32
+```
+
+| Variável | Obrigatório em dev? | Observação |
+|----------|---------------------|------------|
+| `JWT_SECRET` | **Sim** | mínimo 16 caracteres; use `openssl rand -hex 32` |
+| `DB_PASSWORD` / `REDIS_PASSWORD` | Sim (defaults ok) | **mesmo valor** na raiz (`.env`) **e** em `apps/backend/.env` — ver [Credenciais do banco](#credenciais-do-banco-e-redis) |
+| Google OAuth, reCAPTCHA, SMTP | Não | opcionais para explorar dashboard e chat demo; necessários para cadastro/login real e criar fórum |
 
 > `DB_PASSWORD` e `REDIS_PASSWORD` na raiz (`.env`) devem bater com `apps/backend/.env`.
+
+#### Credenciais do banco e Redis
+
+Pode usar **outra senha** que não seja `postgres` — o importante é que ela seja **igual nos dois lugares**:
+
+| Arquivo | Variável | Exemplo |
+|---------|----------|---------|
+| `.env` (raiz) | `DB_PASSWORD` | `minha_senha_123` |
+| `apps/backend/.env` | `DB_PASSWORD` | `minha_senha_123` (igual) |
+| `.env` (raiz) | `REDIS_PASSWORD` | `redis_dev_local` |
+| `apps/backend/.env` | `REDIS_URL` | `redis://:redis_dev_local@localhost:6379` (senha dentro da URL) |
+
+**Se as senhas não baterem**, o backend falha com erro de autenticação, por exemplo:
+`password authentication failed for user "postgres"` ou `connect ECONNREFUSED`.
+
+**Atenção ao trocar senha depois:** o Postgres grava a senha no **volume Docker** na primeira subida. Se você já rodou `pnpm dev` antes com `postgres` e depois mudar só o `.env`, o container continua com a senha antiga. Opções:
+
+1. **Manter a senha antiga** nos dois `.env` (mais simples), ou
+2. **Recriar o volume** (apaga todos os dados locais):
+   ```bash
+   pnpm dev:infra:down
+   docker volume rm tech4um_postgres_data tech4um_redis_data
+   # ajuste DB_PASSWORD / REDIS_PASSWORD nos dois .env com o mesmo valor novo
+   pnpm dev
+   ```
+
+**Resumo para quem está começando:** copie os `.env.example` sem mudar nada (só defina `JWT_SECRET`) — as senhas padrão já vêm alinhadas e as salas aparecem sozinhas no primeiro `pnpm dev`.
 
 ### 3. Subir tudo com um comando
 
@@ -72,18 +222,49 @@ Isso executa, nesta ordem:
 
 O TypeORM cria as tabelas automaticamente em desenvolvimento (`synchronize: true`).
 
-Na **primeira execução** com banco vazio, o backend cria automaticamente **15 salas de tecnologia** e um usuário demo (sem precisar de login prévio). O dashboard já abre populado.
+### Salas de demonstração (primeira vez)
 
-Para **entrar no chat** de uma sala, faça login com a conta demo (ou cadastre a sua):
+**Não precisa rodar `pnpm seed` na primeira vez.** Basta `pnpm dev` com banco vazio: o backend cria sozinho as 15 salas + usuário demo ao subir.
+
+O `pnpm seed` só é necessário se você **já tem salas** e quer **apagar tudo e recriar** do zero.
+
+O projeto já vem com **15 salas de tecnologia** pré-definidas (IA, Cloud, DevOps, React, etc.).
+
+| Situação | O que acontece |
+|----------|----------------|
+| **Primeiro `pnpm dev` com banco vazio** | O backend cria automaticamente as 15 salas + usuário demo |
+| **Banco já tem salas** | O seed automático **não roda de novo** (evita duplicar) |
+| **Quer recriar as salas do zero** | Rode `pnpm seed` (apaga salas, mensagens e participantes existentes) |
+| **Quer desativar o seed** | `SEED_DEMO_DATA=false` em `apps/backend/.env` |
+
+**Regras do seed automático** (`DemoDataSeeder`):
+
+- **Desenvolvimento:** ativo por padrão (`SEED_DEMO_DATA` omitido ou diferente de `false`)
+- **Produção:** desativado por padrão; use `SEED_DEMO_DATA=true` no `.env` da VPS se quiser popular na primeira subida
+
+**Conta demo** (para entrar no chat e enviar mensagens):
 
 | Campo | Valor |
 |-------|-------|
 | E-mail | `demo@tech4um.local` |
 | Senha | `Demo1234!` |
 
-> Listar salas no dashboard é público; login só é exigido para entrar no chat, enviar mensagens ou criar fórum.
+> **Listar salas** no dashboard é público (não exige login). **Entrar no chat**, enviar mensagens ou criar fórum exige autenticação.
 
-Desative o seed automático com `SEED_DEMO_DATA=false` em `apps/backend/.env`.
+**Fluxo típico na primeira máquina:**
+
+```bash
+git clone https://github.com/AndersonSilver/tech4um.git
+cd tech4um
+pnpm install
+cp .env.example .env
+cp apps/backend/.env.example apps/backend/.env
+cp apps/frontend/.env.example apps/frontend/.env
+# defina JWT_SECRET em apps/backend/.env (openssl rand -hex 32)
+pnpm dev
+# abra http://localhost:5173 — as salas já aparecem no dashboard
+# faça login com demo@tech4um.local para entrar em uma sala
+```
 
 ### Comandos úteis
 
@@ -93,11 +274,34 @@ Desative o seed automático com `SEED_DEMO_DATA=false` em `apps/backend/.env`.
 | `pnpm dev:app` | Só frontend/backend (infra já rodando) |
 | `pnpm dev:infra` | Só Postgres + Redis |
 | `pnpm dev:infra:down` | Para Postgres + Redis |
-| `pnpm seed` | Recria 15 salas de tecnologia (apaga salas existentes; útil após testes) |
+| `pnpm seed` | **Opcional** — só para recriar salas demo após apagar manualmente ou em testes (não é passo da 1ª instalação) |
 | `pnpm db:shell` | Abre `psql` no Postgres do container |
 | `pnpm db:logs` | Logs de Postgres e Redis |
 
 > **Persistência:** nunca rode `docker compose down -v` — o flag `-v` **apaga** os volumes e todo o banco.
+
+### Solução de problemas (setup)
+
+| Erro | Causa | Solução |
+|------|-------|---------|
+| `pnpm: comando não encontrado` | pnpm não instalado ou fora do `PATH` | Siga [Instalar o pnpm](#instalar-o-pnpm-versão-9) acima |
+| `Docker não encontrado` | Falta Docker ou emulador no Fedora | `sudo dnf install -y podman-docker docker-compose` |
+| `podman.sock: no such file` | Socket do Podman inativo (Fedora) | `systemctl --user enable --now podman.socket` |
+| `Variáveis de ambiente obrigatórias ausentes: JWT_SECRET` | `apps/backend/.env` não foi criado | `cp apps/backend/.env.example apps/backend/.env` e defina `JWT_SECRET` |
+| `connect ECONNREFUSED 127.0.0.1:5433` | Postgres não está rodando | `pnpm dev:infra` ou `pnpm dev` (sobe a infra antes do app) |
+| `password authentication failed for user "postgres"` | `DB_PASSWORD` diferente entre `.env` da raiz e `apps/backend/.env`, ou volume criado com senha antiga | Alinhe os dois arquivos; se mudou senha depois, recrie o volume (ver [Credenciais](#credenciais-do-banco-e-redis)) |
+| `NOAUTH` / erro no Redis | `REDIS_PASSWORD` não bate com a senha em `REDIS_URL` | Use a mesma senha na raiz e em `redis://:SENHA@localhost:6379` |
+| `permission denied` ao instalar pnpm global | npm tentou escrever em `/usr/local` sem sudo | Use `--prefix "$HOME/.local"` (opção B acima) |
+
+**Checklist rápido antes de avaliar:**
+
+```bash
+node -v          # >= 20
+pnpm -v          # 9.x
+docker compose version
+test -f apps/backend/.env && test -f apps/frontend/.env && echo "env OK"
+pnpm dev
+```
 
 ### Login com Google
 
@@ -191,7 +395,7 @@ Após uma avaliação interna (simulando o que um pentest básico cobriria), os 
 
 ### 🟠 Médios corrigidos
 - **Helmet** habilitado (headers de segurança padrão: HSTS, X-Content-Type-Options, remoção de `X-Powered-By` etc.).
-- **Limite de tamanho de payload** (`express.json({ limit: "100kb" })`) — mitiga DoS por payload gigante.
+- **Limite de tamanho de payload** (`express.json({ limit: "16mb" })`) — suporta upload de imagem em base64 no chat, com margem para o JSON completo.
 - **Revogação de sessão (logout real)** — `POST /auth/logout` adiciona o `jti` do token a uma blacklist em memória, verificada em toda requisição autenticada e também nos WebSockets. Um token roubado/antigo não funciona mais após logout.
 - **Tempo de vida do token reduzido** de 1 dia para 2h por padrão (configurável via `JWT_EXPIRES_IN`).
 - **CORS estrito** — sem fallback para `*`; em produção, a inicialização falha se `CORS_ORIGIN` não estiver definido.
