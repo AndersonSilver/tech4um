@@ -53,14 +53,4 @@ describe("UserRepository", () => {
     expect(user.username).toBe("novo");
   });
 
-  it("markEmailVerified limpa tokens com null explícito", async () => {
-    const repository = new UserRepository();
-    await repository.markEmailVerified("user-1");
-
-    expect(repoMock.update).toHaveBeenCalledWith("user-1", {
-      isEmailVerified: true,
-      emailVerificationTokenHash: null,
-      emailVerificationExpiresAt: null,
-    });
-  });
 });

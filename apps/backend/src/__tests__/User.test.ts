@@ -7,7 +7,6 @@ describe("User", () => {
     user.username = "lara";
     user.email = "lara@email.com";
     user.avatarUrl = "/api/avatars/blue-bot.svg";
-    user.isEmailVerified = true;
     user.passwordHash = "hash-secreto";
 
     expect(user.toPublic()).toEqual({
@@ -15,7 +14,8 @@ describe("User", () => {
       username: "lara",
       email: "lara@email.com",
       avatarUrl: "/api/avatars/blue-bot.svg",
-      isEmailVerified: true,
+      hasPassword: true,
+      hasGoogle: false,
     });
     expect(user.toPublic()).not.toHaveProperty("passwordHash");
   });

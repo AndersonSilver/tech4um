@@ -29,7 +29,6 @@ function buildUser(overrides: Partial<User> = {}): User {
   user.id = "user-1";
   user.username = "lara";
   user.email = "lara@email.com";
-  user.isEmailVerified = true;
   Object.assign(user, overrides);
   return user;
 }
@@ -54,8 +53,6 @@ describe("AuthController", () => {
       loginWithGoogle: jest.fn(),
       getProfile: jest.fn(),
       updateAvatar: jest.fn(),
-      verifyEmail: jest.fn(),
-      resendVerificationEmail: jest.fn(),
       ...authOverrides,
     } as unknown as AuthService;
 
@@ -222,33 +219,4 @@ describe("AuthController", () => {
     expect(res.json).toHaveBeenCalledWith({ user: publicUser });
   });
 
-  it("verifyEmail() confirma e-mail com token válido", async () => {
-    const { controller, authService } = buildController({
-      verifyEmail: jest.fn().mockResolvedValue(undefined),
-    });
-
-    const req = { query: { token: "valid-token-1234567890" } } as any;
-    const res = buildResponse();
-    const next = jest.fn();
-
-    await controller.verifyEmail(req, res as any, next);
-
-    expect(authService.verifyEmail).toHaveBeenCalledWith("valid-token-1234567890");
-    expect(res.status).toHaveBeenCalledWith(200);
-  });
-
-  it("resendVerification() responde com mensagem genérica", async () => {
-    const { controller, authService } = buildController({
-      resendVerificationEmail: jest.fn().mockResolvedValue(undefined),
-    });
-
-    const req = { body: { email: "lara@email.com" } } as any;
-    const res = buildResponse();
-    const next = jest.fn();
-
-    await controller.resendVerification(req, res as any, next);
-
-    expect(authService.resendVerificationEmail).toHaveBeenCalledWith("lara@email.com");
-    expect(res.status).toHaveBeenCalledWith(200);
-  });
 });

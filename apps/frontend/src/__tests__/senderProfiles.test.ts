@@ -17,7 +17,7 @@ describe("buildSenderProfileIndex", () => {
           username: "Talia",
           email: "talia@email.com",
           avatarUrl: "/api/avatars/old.svg",
-          isEmailVerified: true,
+          
         },
       },
       {
@@ -32,7 +32,7 @@ describe("buildSenderProfileIndex", () => {
           username: "Talia",
           email: "talia@email.com",
           avatarUrl: "/api/avatars/orange-fox.svg",
-          isEmailVerified: true,
+          
         },
       },
     ];
@@ -56,7 +56,7 @@ describe("buildSenderProfileIndex", () => {
           username: "Talia",
           email: "talia@email.com",
           avatarUrl: "/api/avatars/old.svg",
-          isEmailVerified: true,
+          
         },
       },
     ];
@@ -68,7 +68,7 @@ describe("buildSenderProfileIndex", () => {
         username: "Talia",
         email: "talia@email.com",
         avatarUrl: "/api/avatars/orange-fox.svg",
-        isEmailVerified: true,
+        
       },
     });
 

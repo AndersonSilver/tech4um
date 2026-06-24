@@ -2,10 +2,6 @@ import { AuthService } from "../services/AuthService";
 import { UserRepository } from "../repositories/UserRepository";
 import { User } from "../entities/User";
 
-jest.mock("../services/EmailService", () => ({
-  EmailService: { sendVerificationEmail: jest.fn().mockResolvedValue(undefined) },
-}));
-
 jest.mock("../utils/GoogleTokenVerifier", () => ({
   GoogleTokenVerifier: {
     verifyAuthCode: jest.fn(),
@@ -19,9 +15,6 @@ jest.mock("../utils/imageUpload", () => ({
 
 import { GoogleTokenVerifier } from "../utils/GoogleTokenVerifier";
 import { saveImageFromDataUrl } from "../utils/imageUpload";
-import { EmailService } from "../services/EmailService";
-import { PasswordHasher } from "../utils/PasswordHasher";
-import { createHash } from "crypto";
 
 function buildFakeUser(overrides: Partial<User> = {}): User {
   const user = new User();
@@ -29,7 +22,6 @@ function buildFakeUser(overrides: Partial<User> = {}): User {
   user.username = "lara";
   user.email = "lara@email.com";
   user.passwordHash = "$2b$10$hashedpasswordvalue1234567890123456789012";
-  user.isEmailVerified = false;
   Object.assign(user, overrides);
   return user;
 }
@@ -44,9 +36,6 @@ describe("AuthService", () => {
       linkGoogleAccount: jest.fn(),
       create: jest.fn(),
       updateProfile: jest.fn(),
-      setEmailVerificationToken: jest.fn().mockResolvedValue(undefined),
-      findByValidVerificationTokenHash: jest.fn(),
-      markEmailVerified: jest.fn().mockResolvedValue(undefined),
       ...overrides,
     } as unknown as UserRepository;
 
@@ -114,43 +103,6 @@ describe("AuthService", () => {
     ).rejects.toThrow("Credenciais inválidas");
   });
 
-  it("verifyEmail() marca e-mail como verificado com token válido", async () => {
-    const rawToken = "a".repeat(64);
-    const tokenHash = createHash("sha256").update(rawToken).digest("hex");
-    const user = buildFakeUser();
-
-    const { service, repository } = buildService({
-      findByValidVerificationTokenHash: jest.fn().mockResolvedValue(user),
-    } as any);
-
-    await service.verifyEmail(rawToken);
-
-    expect(repository.findByValidVerificationTokenHash).toHaveBeenCalledWith(tokenHash);
-    expect(repository.markEmailVerified).toHaveBeenCalledWith("user-1");
-  });
-
-  it("verifyEmail() rejeita token inválido ou expirado", async () => {
-    const { service } = buildService({
-      findByValidVerificationTokenHash: jest.fn().mockResolvedValue(null),
-    } as any);
-
-    await expect(service.verifyEmail("token-invalido")).rejects.toThrow(
-      "Link de verificação inválido ou expirado."
-    );
-  });
-
-  it("resendVerificationEmail() não faz nada quando o e-mail já está verificado", async () => {
-    const verifiedUser = buildFakeUser({ isEmailVerified: true });
-    const { service, repository } = buildService({
-      findByEmail: jest.fn().mockResolvedValue(verifiedUser),
-    } as any);
-
-    await service.resendVerificationEmail("lara@email.com");
-
-    expect(repository.setEmailVerificationToken).not.toHaveBeenCalled();
-    expect(EmailService.sendVerificationEmail).not.toHaveBeenCalled();
-  });
-
   it("getProfile() retorna 404 quando usuário não existe", async () => {
     const { service } = buildService({
       findById: jest.fn().mockResolvedValue(null),
@@ -201,7 +153,6 @@ describe("AuthService", () => {
       id: "user-google",
       email: "novo@gmail.com",
       username: "Novo Usuário",
-      isEmailVerified: true,
     });
 
     const { service, repository } = buildService({
@@ -217,7 +168,6 @@ describe("AuthService", () => {
       expect.objectContaining({
         email: "novo@gmail.com",
         googleId: "google-1",
-        isEmailVerified: true,
       })
     );
     expect(result.token).toBeDefined();

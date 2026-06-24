@@ -39,9 +39,6 @@ const googleLoginSchema = z.object({
   redirectUri: z.string().url(),
 });
 
-const resendVerificationSchema = z.object({ email: z.string().email() });
-const verifyEmailSchema = z.object({ token: z.string().min(10) });
-
 const updateAvatarSchema: z.ZodType<UpdateAvatarRequestDTO> = z
   .object({
     dataUrl: z.string().min(1).optional(),
@@ -130,31 +127,6 @@ export class AuthController {
       const data = updateAvatarSchema.parse(req.body);
       const user = await this.authService.updateAvatar(userId, data);
       return res.status(200).json({ user });
-    } catch (error) {
-      next(error);
-    }
-  };
-
-  // ---------- Verificação de e-mail ----------
-
-  verifyEmail = async (req: Request, res: Response, next: NextFunction) => {
-    try {
-      const { token } = verifyEmailSchema.parse(req.query);
-      await this.authService.verifyEmail(token);
-      return res.status(200).json({ message: "E-mail verificado com sucesso." });
-    } catch (error) {
-      next(error);
-    }
-  };
-
-  resendVerification = async (req: Request, res: Response, next: NextFunction) => {
-    try {
-      const { email } = resendVerificationSchema.parse(req.body);
-      await this.authService.resendVerificationEmail(email);
-      // Resposta sempre genérica/idêntica — evita confirmar se o e-mail existe.
-      return res
-        .status(200)
-        .json({ message: "Se o e-mail existir e não estiver verificado, enviamos um novo link." });
     } catch (error) {
       next(error);
     }

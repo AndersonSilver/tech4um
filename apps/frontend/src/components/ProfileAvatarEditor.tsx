@@ -121,8 +121,8 @@ export function ProfileAvatarEditor({ username, avatarUrl }: ProfileAvatarEditor
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex items-center gap-6 rounded-compact bg-surface/60 px-5 py-5">
-        <div className="h-24 w-24 rounded-full overflow-hidden bg-bordergray shrink-0 shadow-compact ring-4 ring-white">
+      <div className="flex flex-col items-center gap-3 py-2">
+        <div className="h-24 w-24 rounded-full overflow-hidden bg-bordergray shrink-0 shadow-compact ring-4 ring-surface/80">
           {previewAvatarSrc ? (
             <img src={previewAvatarSrc} alt={username} className="h-full w-full object-cover" />
           ) : (
@@ -132,10 +132,10 @@ export function ProfileAvatarEditor({ username, avatarUrl }: ProfileAvatarEditor
           )}
         </div>
 
-        <div className="flex flex-col gap-1 min-w-0">
+        <div className="flex flex-col items-center gap-0.5 min-w-0 text-center">
           <p className="font-poppins font-semibold text-base text-textgray m-0">{username}</p>
           <p className="font-poppins text-xs text-bordergray m-0">
-            Pré-visualização do seu perfil no chat.
+            Assim você aparece nas mensagens.
           </p>
         </div>
       </div>
@@ -228,14 +228,6 @@ export function ProfileAvatarEditor({ username, avatarUrl }: ProfileAvatarEditor
           <p className="font-poppins text-[11px] text-bordergray m-0">
             Envie uma foto JPG, PNG, GIF ou WebP de até 10MB.
           </p>
-
-          {uploadPreview && (
-            <img
-              src={uploadPreview}
-              alt="Pré-visualização da foto"
-              className="h-28 w-28 rounded-full object-cover border border-bordergray"
-            />
-          )}
 
           <input
             ref={fileInputRef}

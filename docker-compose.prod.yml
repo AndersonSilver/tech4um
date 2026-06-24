@@ -65,16 +65,10 @@ services:
       DB_NAME: tech4um
       REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
       CORS_ORIGIN: "${CORS_ORIGIN:?Defina CORS_ORIGIN no .env}"
-      FRONTEND_URL: "${FRONTEND_URL:?Defina FRONTEND_URL no .env}"
       GOOGLE_CLIENT_ID: "${GOOGLE_CLIENT_ID:-}"
       GOOGLE_CLIENT_SECRET: "${GOOGLE_CLIENT_SECRET:-}"
       RECAPTCHA_SECRET_KEY: "${RECAPTCHA_SECRET_KEY:?Defina RECAPTCHA_SECRET_KEY no .env}"
       RECAPTCHA_MIN_SCORE: "${RECAPTCHA_MIN_SCORE:-0.5}"
-      SMTP_HOST: "${SMTP_HOST:?Defina SMTP_HOST no .env}"
-      SMTP_PORT: "${SMTP_PORT:-587}"
-      SMTP_USER: "${SMTP_USER:-}"
-      SMTP_PASSWORD: "${SMTP_PASSWORD:-}"
-      SMTP_FROM: "${SMTP_FROM:-Tech4um <no-reply@seudominio.com>}"
       SEED_DEMO_DATA: "${SEED_DEMO_DATA:-false}"
       TYPEORM_SYNC_ONCE: "${TYPEORM_SYNC_ONCE:-false}"
     volumes:

@@ -28,7 +28,7 @@ describe("AuthContext", () => {
 
   it("restaura sessão via /auth/me ao montar", async () => {
     vi.mocked(api.get).mockResolvedValue({
-      data: { id: "1", username: "lara", email: "l@x.com", isEmailVerified: true },
+      data: { id: "1", username: "lara", email: "l@x.com" },
     });
 
     render(
@@ -73,7 +73,7 @@ describe("AuthContext", () => {
     await waitFor(() => expect(authApi).not.toBeNull());
 
     vi.mocked(api.post).mockResolvedValue({
-      data: { user: { id: "2", username: "joao", email: "j@x.com", isEmailVerified: false } },
+      data: { user: { id: "2", username: "joao", email: "j@x.com" } },
     });
 
     await act(async () => {

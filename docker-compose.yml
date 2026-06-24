@@ -56,15 +56,9 @@ services:
       DB_NAME: tech4um
       REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
       CORS_ORIGIN: "${CORS_ORIGIN:-http://localhost:5173}"
-      FRONTEND_URL: "${FRONTEND_URL:-http://localhost:5173}"
       GOOGLE_CLIENT_ID: "${GOOGLE_CLIENT_ID:-}"
       GOOGLE_CLIENT_SECRET: "${GOOGLE_CLIENT_SECRET:-}"
       RECAPTCHA_SECRET_KEY: "${RECAPTCHA_SECRET_KEY:?Defina RECAPTCHA_SECRET_KEY (CAPTCHA) antes de rodar docker compose}"
-      SMTP_HOST: "${SMTP_HOST:?Defina SMTP_HOST (envio de e-mail) antes de rodar docker compose}"
-      SMTP_PORT: "${SMTP_PORT:-587}"
-      SMTP_USER: "${SMTP_USER:-}"
-      SMTP_PASSWORD: "${SMTP_PASSWORD:-}"
-      SMTP_FROM: "${SMTP_FROM:-Tech4um <no-reply@tech4um.dev>}"
     ports:
       - "3333:3333"
 

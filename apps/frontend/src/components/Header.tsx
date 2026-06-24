@@ -7,9 +7,11 @@ import btnEntrarAzul from "../assets/botao-entrar-azul.png";
 
 interface HeaderProps {
   onLoginClick?: () => void;
+  /** Oculta nome e e-mail ao lado do avatar (ex.: página de configurações). */
+  compactUser?: boolean;
 }
 
-export function Header({ onLoginClick }: HeaderProps) {
+export function Header({ onLoginClick, compactUser = false }: HeaderProps) {
   const { user, isAuthenticated, logout } = useAuth();
   const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
@@ -44,14 +46,16 @@ export function Header({ onLoginClick }: HeaderProps) {
 
       {isAuthenticated && user ? (
         <div className="relative flex items-center gap-2 sm:gap-3 shrink-0">
-          <div className="hidden md:flex flex-col items-end text-textgray min-w-0">
-            <span className="font-poppins font-bold text-sm leading-normal">
-              {user.username}
-            </span>
-            <span className="font-poppins font-normal text-[10px] leading-normal">
-              {user.email}
-            </span>
-          </div>
+          {!compactUser && (
+            <div className="hidden md:flex flex-col items-end text-textgray min-w-0">
+              <span className="font-poppins font-bold text-sm leading-normal">
+                {user.username}
+              </span>
+              <span className="font-poppins font-normal text-[10px] leading-normal">
+                {user.email}
+              </span>
+            </div>
+          )}
           <button
             type="button"
             onClick={() => setMenuOpen((open) => !open)}

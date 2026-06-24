@@ -176,7 +176,7 @@ openssl rand -hex 32
 |----------|---------------------|------------|
 | `JWT_SECRET` | **Sim** | mínimo 16 caracteres; use `openssl rand -hex 32` |
 | `DB_PASSWORD` / `REDIS_PASSWORD` | Sim (defaults ok) | **mesmo valor** na raiz (`.env`) **e** em `apps/backend/.env` — ver [Credenciais do banco](#credenciais-do-banco-e-redis) |
-| Google OAuth, reCAPTCHA, SMTP | Não | opcionais para explorar dashboard e chat demo; necessários para cadastro/login real e criar fórum |
+| Google OAuth, reCAPTCHA | Não | opcionais para explorar dashboard e chat demo; necessários para cadastro/login real |
 
 > `DB_PASSWORD` e `REDIS_PASSWORD` na raiz (`.env`) devem bater com `apps/backend/.env`.
 
@@ -436,42 +436,39 @@ Stack de produção isolada (`docker-compose.prod.yml`) + CI/CD via GitHub Actio
 
 ## Segurança
 
-Após uma avaliação interna (simulando o que um pentest básico cobriria), os seguintes pontos foram endurecidos:
+O Tech4um aplica segurança em camadas na API REST, no WebSocket e na autenticação.
 
-### 🔴 Críticos corrigidos
-- **Sem segredo fraco/padrão em lugar nenhum** — `JWT_SECRET` e a senha do Postgres não têm mais valor default no `docker-compose.yml`; o compose falha explicitamente (`:?mensagem`) se não forem definidos via variável de ambiente. `TokenService` também valida em runtime que o secret tem no mínimo 16 caracteres.
-- **Rate limiting** em `/auth/login`, `/auth/register`, `/auth/google` (10 tentativas / 15 min por IP) e um limite geral na API (120 req/min). Mitiga brute-force e DoS simples.
-- **Token de autenticação migrado de `localStorage` para cookie `httpOnly` + `Secure` (produção) + `SameSite=Strict`** — JavaScript não consegue mais ler o token, mesmo com XSS. `SameSite=Strict` também mitiga CSRF na grande maioria dos cenários.
-- **Mensagem de erro de cadastro anti-enumeração** — não revela mais se um e-mail específico já está cadastrado (username continua revelando, por ser um identificador público).
-- **`synchronize: true` do TypeORM agora é condicionado a `NODE_ENV !== "production"`** — nunca mais altera schema de produção sem migration.
+### Autenticação e sessão
 
-### 🟠 Médios corrigidos
-- **Helmet** habilitado (headers de segurança padrão: HSTS, X-Content-Type-Options, remoção de `X-Powered-By` etc.).
-- **Limite de tamanho de payload** (`express.json({ limit: "16mb" })`) — suporta upload de imagem em base64 no chat, com margem para o JSON completo.
-- **Revogação de sessão (logout real)** — `POST /auth/logout` adiciona o `jti` do token a uma blacklist em memória, verificada em toda requisição autenticada e também nos WebSockets. Um token roubado/antigo não funciona mais após logout.
-- **Tempo de vida do token reduzido** de 1 dia para 2h por padrão (configurável via `JWT_EXPIRES_IN`).
-- **CORS estrito** — sem fallback para `*`; em produção, a inicialização falha se `CORS_ORIGIN` não estiver definido.
-- **Política de senha** — mínimo 8 caracteres, exigindo maiúscula, minúscula e número.
-- **Revalidação periódica de sessão no WebSocket** (a cada 5 min) — desconecta o socket se o token foi revogado nesse meio tempo.
+- **Login e cadastro** com e-mail e senha; senhas armazenadas com **bcrypt** e política mínima (8 caracteres, maiúscula, minúscula e número).
+- **Login com Google** via Google Identity Services no frontend; o backend valida o `idToken` com `google-auth-library`.
+- Sessão em **cookie `httpOnly`**, com `Secure` em produção e `SameSite=Strict` — o token não fica em `localStorage` e não é acessível via JavaScript.
+- **JWT** assinado com `JWT_SECRET` obrigatório (mínimo 16 caracteres); expiração padrão de **2h** (`JWT_EXPIRES_IN`).
+- **Logout com revogação real:** o `jti` do token entra numa **blacklist no Redis** (TTL = tempo restante do token), verificada na API e no Socket.IO.
+- **Revalidação no WebSocket** a cada 5 minutos; conexões com sessão revogada são encerradas.
 
-### 🟡 Baixos corrigidos
-- **`pnpm audit --audit-level=high`** adicionado ao pipeline de CI (não bloqueia o build, mas reporta no log).
-- **Validação e rate limiting de mensagens no WebSocket** — conteúdo vazio/maior que 2000 caracteres é rejeitado; no máximo 20 mensagens por 10s por conexão.
-- **Mensagem privada agora valida que o destinatário realmente participa do fórum** antes de permitir o envio (evita enviar "mensagem privada" para qualquer `userId` arbitrário fora de contexto).
+### Proteção da API
 
-### Implementado nesta rodada (antes listado como limitação)
-- **CAPTCHA anti-bot** — Google reCAPTCHA v3 no cadastro e login (token invisível no frontend, verificação via `siteverify` no backend).
-- **Verificação de e-mail** — no cadastro é enviado um link (token aleatório de 32 bytes, do qual guardamos apenas o hash SHA-256, com expiração de 24h) via SMTP/`nodemailer`. Criar fórum exige e-mail verificado. Há reenvio de link com resposta genérica anti-enumeração.
-- **Blacklist de tokens distribuída** — migrada de memória para **Redis** com TTL igual ao tempo restante do token. Um logout agora se propaga entre todas as instâncias do backend.
+- **Helmet** para headers de segurança (HSTS, `X-Content-Type-Options`, remoção de `X-Powered-By`, etc.).
+- **Rate limiting:** 10 tentativas / 15 min por IP em `/auth/login`, `/auth/register` e `/auth/google`; limite geral de **120 req/min** na API.
+- **CORS** restrito à origem configurada em `CORS_ORIGIN` (obrigatório em produção).
+- Limite de payload JSON (**16mb**) para suportar upload de imagem em base64 no chat.
+- **reCAPTCHA v3** no cadastro e login (token no frontend, `siteverify` no backend).
+- Respostas de cadastro **anti-enumeração** de e-mail.
 
-### Limitações que permanecem
-- **Verificação de e-mail não é obrigatória para login** — apenas para ações sensíveis (criar fórum). Decisão de produto para não travar o acesso por um e-mail que pode não ter chegado.
-- **WAF / proteção de borda** — fica a cargo da infraestrutura (ex.: Cloudflare na frente do VPS).
+### WebSocket (chat)
 
-## Autenticação
+- Autenticação no handshake com o **mesmo cookie** da API REST.
+- **Rate limiting** por conexão: até 20 mensagens a cada 10 segundos.
+- Validação de conteúdo (vazio, limite de 2000 caracteres, URL de imagem válida).
+- **Mensagem privada** só é aceita se o destinatário participa do fórum.
+- Mensagens públicas e privadas são **persistidas no PostgreSQL** antes do broadcast.
 
-- Login/cadastro com e-mail e senha (hash com bcrypt, política de senha forte)
-- Login social com Google (Google Identity Services no frontend + verificação do `idToken` com `google-auth-library` no backend)
-- Usuários criados via Google não possuem senha até que decidam definir uma (campo `passwordHash` é opcional na entidade `User`)
-- Sessão via cookie `httpOnly` (não acessível via JavaScript) com revogação real no logout
+### Infraestrutura e segredos
 
+- `JWT_SECRET`, `DB_PASSWORD` e demais segredos **sem valor padrão** no Docker Compose de produção — o compose falha se não estiverem definidos.
+- **TypeORM `synchronize`** desativado em produção (`NODE_ENV !== "production"`).
+- **`pnpm audit --audit-level=high`** no CI (alerta no log; não bloqueia o pipeline).
+- Proteção de borda (WAF, CDN) fica a cargo da infraestrutura em frente à VPS.
+
+---

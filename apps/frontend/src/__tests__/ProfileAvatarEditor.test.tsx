@@ -24,7 +24,7 @@ describe("ProfileAvatarEditor", () => {
     render(<ProfileAvatarEditor username="Lara" avatarUrl="/api/avatars/blue-bot.svg" />);
 
     expect(screen.getByText("Lara")).toBeInTheDocument();
-    expect(screen.getByText("Pré-visualização do seu perfil no chat.")).toBeInTheDocument();
+    expect(screen.getByText("Assim você aparece nas mensagens.")).toBeInTheDocument();
   });
 
   it("alterna para o modo de upload de foto", () => {

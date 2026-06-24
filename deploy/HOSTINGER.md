@@ -67,7 +67,6 @@ URLs (exemplo com subdomínio):
 
 ```env
 CORS_ORIGIN=https://tech4um.seudominio.com
-FRONTEND_URL=https://tech4um.seudominio.com
 VITE_API_URL=https://tech4um.seudominio.com/api
 VITE_SOCKET_URL=https://tech4um.seudominio.com
 ```
@@ -115,7 +114,6 @@ sudo certbot --nginx -d tech4um.seudominio.com
 |---------|------------------|
 | **Google OAuth** | Origem JS: `https://tech4um.seudominio.com` |
 | **reCAPTCHA v3** | Domínio: `tech4um.seudominio.com` |
-| **SMTP Hostinger** | Caixa `no-reply@...` no painel |
 | **DNS** | Registro A `tech4um` → IP da VPS |
 
 ### 1.8 Chave SSH para o GitHub Actions

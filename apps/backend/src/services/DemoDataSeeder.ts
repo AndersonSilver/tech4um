@@ -25,7 +25,6 @@ export async function getOrCreateDemoOwner(dataSource: DataSource): Promise<User
     username: DEMO_OWNER.username,
     email: DEMO_OWNER.email,
     passwordHash,
-    isEmailVerified: true,
   });
 
   return userRepo.save(user);

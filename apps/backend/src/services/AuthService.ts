@@ -1,10 +1,8 @@
-import { randomBytes, createHash } from "crypto";
 import { UserRepository } from "../repositories/UserRepository";
 import { PasswordHasher } from "../utils/PasswordHasher";
 import { TokenService } from "../utils/TokenService";
 import { AppError } from "../utils/AppError";
 import { GoogleTokenVerifier } from "../utils/GoogleTokenVerifier";
-import { EmailService } from "./EmailService";
 import type {
   RegisterRequestDTO,
   LoginRequestDTO,
@@ -14,12 +12,6 @@ import { User } from "../entities/User";
 import type { GoogleProfile } from "../utils/GoogleTokenVerifier";
 import { getPresetAvatarPath, isValidAvatarUrl } from "../utils/avatarValidation";
 import { saveImageFromDataUrl } from "../utils/imageUpload";
-
-const VERIFICATION_TOKEN_TTL_HOURS = 24;
-
-function hashToken(token: string): string {
-  return createHash("sha256").update(token).digest("hex");
-}
 
 export class AuthService {
   constructor(private userRepository: UserRepository = new UserRepository()) {}
@@ -46,8 +38,6 @@ export class AuthService {
       email: input.email,
       passwordHash,
     });
-
-    await this.sendVerificationEmail(user.id, user.email);
 
     const token = TokenService.sign({ sub: user.id, username: user.username });
 
@@ -88,52 +78,14 @@ export class AuthService {
           email: profile.email,
           googleId: profile.googleId,
           avatarUrl: profile.avatarUrl,
-          // E-mail já é verificado pelo próprio Google — não precisa do nosso fluxo.
-          isEmailVerified: true,
         });
       }
     } else {
       user = await this.syncGoogleProfile(user, profile);
     }
 
-    // Login via Google: a posse da conta Google já valida o acesso.
     const token = TokenService.sign({ sub: user.id, username: user.username });
     return { user: user.toPublic(), token };
-  }
-
-  // ---------- Verificação de e-mail ----------
-
-  async sendVerificationEmail(userId: string, email: string): Promise<void> {
-    const rawToken = randomBytes(32).toString("hex");
-    const tokenHash = hashToken(rawToken);
-    const expiresAt = new Date(Date.now() + VERIFICATION_TOKEN_TTL_HOURS * 60 * 60 * 1000);
-
-    await this.userRepository.setEmailVerificationToken(userId, tokenHash, expiresAt);
-
-    const baseUrl = process.env.FRONTEND_URL || "http://localhost:5173";
-    const verificationUrl = `${baseUrl}/verify-email?token=${rawToken}`;
-
-    await EmailService.sendVerificationEmail(email, verificationUrl);
-  }
-
-  async resendVerificationEmail(email: string): Promise<void> {
-    const user = await this.userRepository.findByEmail(email);
-    // Resposta idêntica exista ou não o e-mail — evita enumeração de contas
-    // também neste endpoint.
-    if (!user || user.isEmailVerified) return;
-
-    await this.sendVerificationEmail(user.id, user.email);
-  }
-
-  async verifyEmail(rawToken: string): Promise<void> {
-    const tokenHash = hashToken(rawToken);
-    const user = await this.userRepository.findByValidVerificationTokenHash(tokenHash);
-
-    if (!user) {
-      throw new AppError("Link de verificação inválido ou expirado.", 400);
-    }
-
-    await this.userRepository.markEmailVerified(user.id);
   }
 
   private normalizeGoogleName(name: string): string {

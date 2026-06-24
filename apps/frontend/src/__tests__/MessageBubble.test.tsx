@@ -10,7 +10,7 @@ const baseMessage: Message = {
   senderId: "u1",
   forumId: "f1",
   createdAt: new Date().toISOString(),
-  sender: { id: "u1", username: "Lara", email: "lara@email.com", isEmailVerified: true },
+  sender: { id: "u1", username: "Lara", email: "lara@email.com" },
 };
 
 describe("MessageBubble", () => {
@@ -27,7 +27,7 @@ describe("MessageBubble", () => {
       ...baseMessage,
       type: "private",
       recipientId: "u2",
-      recipient: { id: "u2", username: "Lucas", email: "lucas@email.com", isEmailVerified: true },
+      recipient: { id: "u2", username: "Lucas", email: "lucas@email.com" },
     };
     render(<MessageBubble message={privateMessage} isOwn={true} onReact={onReact} />);
     expect(screen.getByText("Você")).toBeInTheDocument();

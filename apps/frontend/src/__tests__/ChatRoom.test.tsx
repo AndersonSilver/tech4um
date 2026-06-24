@@ -48,7 +48,7 @@ describe("ChatRoom", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(useAuth).mockReturnValue({
-      user: { id: "u1", username: "Lara", email: "l@x.com", isEmailVerified: true },
+      user: { id: "u1", username: "Lara", email: "l@x.com" },
       isAuthenticated: true,
       isLoading: false,
     } as ReturnType<typeof useAuth>);

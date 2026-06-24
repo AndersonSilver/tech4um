@@ -12,7 +12,7 @@ const participants: ForumParticipant[] = [
       id: "u1",
       username: "Lara",
       email: "lara@email.com",
-      isEmailVerified: true,
+      
     },
   },
   {
@@ -23,7 +23,7 @@ const participants: ForumParticipant[] = [
       id: "u2",
       username: "Lucas",
       email: "lucas@email.com",
-      isEmailVerified: true,
+      
     },
   },
 ];

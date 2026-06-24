@@ -13,8 +13,4 @@ router.post("/logout", authMiddleware, controller.logout);
 router.get("/me", controller.me);
 router.patch("/profile/avatar", authMiddleware, controller.updateAvatar);
 
-// Verificação de e-mail
-router.get("/verify-email", controller.verifyEmail);
-router.post("/resend-verification", authRateLimiter, controller.resendVerification);
-
 export default router;

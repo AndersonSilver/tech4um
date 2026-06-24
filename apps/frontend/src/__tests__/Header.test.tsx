@@ -44,7 +44,7 @@ describe("Header", () => {
         id: "1",
         username: "Lara",
         email: "lara@email.com",
-        isEmailVerified: true,
+        
       },
       isAuthenticated: true,
       logout,

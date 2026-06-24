@@ -7,7 +7,8 @@ export interface PublicUser {
   username: string;
   email: string;
   avatarUrl?: string;
-  isEmailVerified: boolean;
+  hasPassword?: boolean;
+  hasGoogle?: boolean;
 }
 
 export interface Forum {
@@ -112,14 +113,6 @@ export interface UpdateAvatarRequestDTO {
 
 export interface UpdateAvatarResponseDTO {
   user: PublicUser;
-}
-
-export interface ResendVerificationRequestDTO {
-  email: string;
-}
-
-export interface VerifyEmailRequestDTO {
-  token: string;
 }
 
 // ---------- Eventos de WebSocket (client -> server) ----------

@@ -19,7 +19,7 @@ const forum: Forum = {
         id: "u1",
         username: "Lara",
         email: "lara@email.com",
-        isEmailVerified: true,
+        
       },
     },
     {
@@ -30,7 +30,7 @@ const forum: Forum = {
         id: "u2",
         username: "João",
         email: "joao@email.com",
-        isEmailVerified: true,
+        
       },
     },
   ],

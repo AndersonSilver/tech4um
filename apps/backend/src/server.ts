@@ -39,9 +39,6 @@ function assertRequiredEnv() {
     if (!process.env.RECAPTCHA_SECRET_KEY) {
       throw new Error("RECAPTCHA_SECRET_KEY é obrigatório em produção (proteção de CAPTCHA).");
     }
-    if (!process.env.SMTP_HOST) {
-      throw new Error("SMTP_HOST é obrigatório em produção (envio de e-mail de verificação).");
-    }
   }
 
   if (process.env.JWT_SECRET && process.env.JWT_SECRET.length < 16) {
