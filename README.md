@@ -12,7 +12,7 @@ Fórum de conversas em tempo real. Monorepo gerenciado com **Turborepo** + **pnp
 - **Frontend:** React + Vite + TypeScript + Tailwind (design 1:1 com o Figma via Figma MCP)
 - **Shared:** pacote `@tech4um/shared` com tipos, DTOs e contratos de eventos de WebSocket compartilhados entre backend e frontend
 - **Monorepo:** Turborepo + pnpm
-- **CI/CD:** GitHub Actions (lint, typecheck, testes, build e deploy na VPS)
+- **CI/CD:** GitHub Actions (lint, typecheck, testes com cobertura mínima, build e deploy na VPS)
 
 ## Arquitetura
 
@@ -276,7 +276,8 @@ pnpm dev
 | `pnpm dev:infra:down` | Para Postgres + Redis |
 | `pnpm seed` | **Opcional** — só para recriar salas demo após apagar manualmente ou em testes (não é passo da 1ª instalação) |
 | `pnpm db:shell` | Abre `psql` no Postgres do container |
-| `pnpm db:logs` | Logs de Postgres e Redis |
+| `pnpm test` | Roda todos os testes (backend + frontend + shared) |
+| `pnpm test:coverage` | Testes + relatório de cobertura + validação de thresholds mínimos |
 
 > **Persistência:** nunca rode `docker compose down -v` — o flag `-v` **apaga** os volumes e todo o banco.
 
@@ -352,16 +353,67 @@ O frontend foi implementado a partir do protótipo oficial no Figma, extraindo c
 
 ## Testes automatizados
 
+O monorepo tem **244 testes** em **65 suites**, distribuídos por pacote:
+
+| Pacote | Runner | Suites | Testes |
+|--------|--------|--------|--------|
+| `@tech4um/backend` | **Jest** | 34 | 136 |
+| `@tech4um/frontend` | **Vitest** | 30 | 105 |
+| `@tech4um/shared` | **Vitest** | 1 | 3 |
+
+> O frontend usa **Vitest** (não Jest), com API compatível (`describe`, `it`, `expect`).
+
+### Comandos
+
 ```bash
-# Backend (Jest) — controllers, services, utils
-pnpm --filter @tech4um/backend test
-
-# Frontend (Vitest) — componentes e utils
-pnpm --filter @tech4um/frontend test
-
-# Ou os dois em paralelo via Turborepo
+# Todos os pacotes em paralelo (Turborepo)
 pnpm test
+pnpm test:coverage   # inclui validação de cobertura mínima
+
+# Por pacote
+pnpm --filter @tech4um/backend test
+pnpm --filter @tech4um/backend test:coverage
+
+pnpm --filter @tech4um/frontend test
+pnpm --filter @tech4um/frontend test:coverage
+
+pnpm --filter @tech4um/shared test
+pnpm --filter @tech4um/shared test:coverage
 ```
+
+Relatórios gerados em `coverage/` de cada pacote (ignorados pelo git).
+
+### Cobertura mínima (thresholds)
+
+O CI falha se a cobertura ficar abaixo destes limites:
+
+| Pacote | Lines | Statements | Branches | Functions |
+|--------|-------|------------|----------|-----------|
+| Backend | 70% | 70% | 50% | 55% |
+| Frontend | 75% | 75% | 75% | 55% |
+| Shared | 95% | 95% | 90% | 90% |
+
+### O que está coberto
+
+**Backend:** controllers, services, utils, middlewares, repositories, sockets (`ChatSocketHandler`), entidades com lógica de domínio.
+
+**Frontend:** componentes, páginas, contexts (`AuthContext`, `SocketContext`), services (`api`, `googleIdentity`, `recaptcha`), utils.
+
+**Shared:** contratos (`PRESET_AVATARS`, `SOCKET_EVENTS`, `QUICK_REACTION_EMOJIS`).
+
+**Fora do escopo unitário** (cobertura via integração/E2E, se necessário no futuro): `server.ts`, `config/*`, `routes/*`, scripts CLI (`reset-forums.ts`).
+
+### CI e bloqueio de merge
+
+O workflow [`.github/workflows/ci.yml`](.github/workflows/ci.yml) executa `pnpm test:coverage` em todo push/PR para `main`. Se algum teste falhar ou a cobertura cair abaixo do threshold, o job **Lint, Typecheck, Test & Build** falha.
+
+Para **bloquear merge** de PRs sem CI verde:
+
+1. Repositório → **Settings** → **Branches**
+2. Regra de proteção em `main` → **Require status checks to pass before merging**
+3. Marque o check **Lint, Typecheck, Test & Build**
+
+O CI também publica o artefato `coverage-reports` (`lcov.info` por pacote) para inspeção nos logs do GitHub Actions.
 
 ## Deploy
 

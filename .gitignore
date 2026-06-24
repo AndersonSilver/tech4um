@@ -9,4 +9,9 @@ build
 *.log
 .DS_Store
 *.tsbuildinfo
+coverage
+apps/backend/coverage
+apps/frontend/coverage
+packages/shared/coverage
+docs/
 apps/backend/uploads/

@@ -39,12 +39,6 @@ export class TokenService {
     return Math.max(payload.exp - Math.floor(Date.now() / 1000), 0);
   }
 
-  /**
-   * Decodifica o token SEM verificar assinatura/expiração.
-   * Usado apenas para checagens não-críticas (ex.: revalidação periódica de socket
-   * para decidir quando vale a pena chamar `verify` novamente). Nunca usar o resultado
-   * deste método para decisões de autorização.
-   */
   static decodeUnsafe(token: string): TokenPayload | null {
     const decoded = jwt.decode(token);
     return (decoded as TokenPayload) ?? null;

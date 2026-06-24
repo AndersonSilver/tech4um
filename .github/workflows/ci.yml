@@ -56,8 +56,8 @@ jobs:
         run: pnpm audit --audit-level=high
         continue-on-error: true # não bloqueia o pipeline, mas deixa o alerta visível no log
 
-      - name: Run tests
-        run: pnpm test
+      - name: Run tests with coverage
+        run: pnpm test:coverage
         env:
           NODE_ENV: test
           JWT_SECRET: ci_test_secret_com_pelo_menos_16_chars
@@ -67,6 +67,17 @@ jobs:
           DB_USER: postgres
           DB_PASSWORD: postgres
           DB_NAME: tech4um_test
+
+      - name: Upload coverage reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-reports
+          path: |
+            apps/backend/coverage/lcov.info
+            apps/frontend/coverage/lcov.info
+            packages/shared/coverage/lcov.info
+          if-no-files-found: ignore
 
       - name: Build all apps
         run: pnpm build

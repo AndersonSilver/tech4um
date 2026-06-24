@@ -11,4 +11,23 @@ module.exports = {
   clearMocks: true,
   setupFiles: ["<rootDir>/../jest.setup.js"],
   globalTeardown: "<rootDir>/../jest.globalTeardown.js",
+  collectCoverageFrom: [
+    "**/*.ts",
+    "!**/__tests__/**",
+    "!**/*.test.ts",
+    "!server.ts",
+    "!config/**",
+    "!scripts/**",
+    "!routes/**",
+  ],
+  coverageDirectory: "<rootDir>/../coverage",
+  coverageReporters: ["text-summary", "lcov"],
+  coverageThreshold: {
+    global: {
+      lines: 70,
+      statements: 70,
+      branches: 50,
+      functions: 55,
+    },
+  },
 };
