@@ -19,7 +19,6 @@ import { connectRedis } from "./config/redis";
 import { seedDemoDataIfNeeded } from "./services/DemoDataSeeder";
 
 const presetAvatarsDir = path.resolve(__dirname, "../assets/avatars");
-
 dotenv.config();
 
 function assertRequiredEnv() {
