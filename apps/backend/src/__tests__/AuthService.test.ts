@@ -173,4 +173,35 @@ describe("AuthService", () => {
     expect(result.token).toBeDefined();
     expect(result.user.email).toBe("novo@gmail.com");
   });
+
+  it("loginWithGoogle() não sobrescreve avatar preset em logins seguintes", async () => {
+    (GoogleTokenVerifier.verifyAuthCode as jest.Mock).mockResolvedValue({
+      googleId: "google-1",
+      email: "user@gmail.com",
+      name: "User Google",
+      avatarUrl: "https://lh3.googleusercontent.com/a/new-photo=s96-c",
+    });
+
+    const existing = buildFakeUser({
+      googleId: "google-1",
+      avatarUrl: "/api/avatars/blue-bot.svg",
+    });
+
+    const updated = buildFakeUser({
+      ...existing,
+      username: "User Google",
+    });
+
+    const { service, repository } = buildService({
+      findByGoogleId: jest.fn().mockResolvedValue(existing),
+      findByUsername: jest.fn().mockResolvedValue(null),
+      updateProfile: jest.fn().mockResolvedValue(updated),
+    } as any);
+
+    await service.loginWithGoogle("code", "http://localhost/callback");
+
+    expect(repository.updateProfile).toHaveBeenCalledWith("user-1", {
+      username: "User Google",
+    });
+  });
 });

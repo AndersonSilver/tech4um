@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
-import { getUserInitial, resolveAvatarUrl } from "../utils/resolveAvatarUrl";
+import { AvatarImage } from "./AvatarImage";
 import logoLarge from "../assets/Logo-grande.png";
 import btnEntrarAzul from "../assets/botao-entrar-azul.png";
 
@@ -15,8 +15,6 @@ export function Header({ onLoginClick, compactUser = false }: HeaderProps) {
   const { user, isAuthenticated, logout } = useAuth();
   const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
-
-  const avatarSrc = resolveAvatarUrl(user?.avatarUrl);
 
   async function handleLogout() {
     await logout();
@@ -62,17 +60,12 @@ export function Header({ onLoginClick, compactUser = false }: HeaderProps) {
             className="w-10 h-10 sm:w-12 sm:h-12 rounded-full overflow-hidden bg-bordergray border-0 p-0 cursor-pointer shrink-0"
             aria-label="Menu do usuário"
           >
-            {avatarSrc ? (
-              <img
-                src={avatarSrc}
-                alt={user.username}
-                className="w-full h-full object-cover"
-              />
-            ) : (
-              <span className="flex h-full w-full items-center justify-center font-poppins text-sm text-background bg-primary-dark">
-                {getUserInitial(user.username)}
-              </span>
-            )}
+            <AvatarImage
+              avatarUrl={user.avatarUrl}
+              alt={user.username}
+              className="w-full h-full object-cover"
+              fallbackClassName="flex h-full w-full items-center justify-center font-poppins text-sm text-background bg-primary-dark"
+            />
           </button>
 
           {menuOpen && (

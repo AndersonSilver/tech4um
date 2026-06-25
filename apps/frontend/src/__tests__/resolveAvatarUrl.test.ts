@@ -25,7 +25,13 @@ describe("resolveAvatarUrl", () => {
 
   it("preserva URLs absolutas", () => {
     expect(resolveAvatarUrl("https://lh3.googleusercontent.com/a/avatar")).toBe(
-      "https://lh3.googleusercontent.com/a/avatar"
+      "https://lh3.googleusercontent.com/a/avatar=s96-c"
+    );
+  });
+
+  it("não altera URL do Google que já tem tamanho", () => {
+    expect(resolveAvatarUrl("https://lh3.googleusercontent.com/a/avatar=s128-c")).toBe(
+      "https://lh3.googleusercontent.com/a/avatar=s128-c"
     );
   });
 

@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { ForumParticipant } from "../types";
-import { getUserInitial, resolveAvatarUrl } from "../utils/resolveAvatarUrl";
+import { getUserInitial } from "../utils/resolveAvatarUrl";
+import { AvatarImage } from "./AvatarImage";
 
 interface ParticipantsListProps {
   participants: ForumParticipant[];
@@ -52,7 +53,6 @@ function ParticipantRow({
   const isActive = activePrivateTo === participant.userId;
   const username = participant.user?.username ?? "Usuário";
   const isSelf = participant.userId === currentUserId;
-  const avatarSrc = resolveAvatarUrl(participant.user?.avatarUrl);
   const isOnline = participant.isOnline;
 
   return (
@@ -68,8 +68,12 @@ function ParticipantRow({
     >
       <div className="relative h-10 w-10 shrink-0">
         <div className="h-full w-full rounded-full bg-bordergray overflow-hidden">
-          {avatarSrc ? (
-            <img src={avatarSrc} alt={username} className="h-full w-full object-cover" />
+          {participant.user?.avatarUrl ? (
+            <AvatarImage
+              avatarUrl={participant.user.avatarUrl}
+              alt={username}
+              className="h-full w-full object-cover"
+            />
           ) : (
             <span className="flex h-full w-full items-center justify-center font-poppins text-xs text-background bg-primary-dark">
               {getUserInitial(username)}

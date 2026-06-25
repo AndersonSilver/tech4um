@@ -8,6 +8,14 @@ export interface GoogleProfile {
   avatarUrl?: string;
 }
 
+/** Fotos do Google sem sufixo de tamanho (=s96-c) podem falhar ao carregar no browser. */
+export function normalizeGooglePictureUrl(url?: string | null): string | undefined {
+  if (!url) return undefined;
+  if (!url.includes("googleusercontent.com")) return url;
+  if (/=s\d+(-c)?($|[?&#])/i.test(url)) return url;
+  return `${url}${"=s96-c"}`;
+}
+
 function createOAuthClient(redirectUri?: string) {
   return new OAuth2Client(
     process.env.GOOGLE_CLIENT_ID,
@@ -56,7 +64,7 @@ export class GoogleTokenVerifier {
         payload.name ||
         [payload.given_name, payload.family_name].filter(Boolean).join(" ") ||
         payload.email.split("@")[0],
-      avatarUrl: payload.picture,
+      avatarUrl: normalizeGooglePictureUrl(payload.picture),
     };
   }
 }

@@ -76,4 +76,19 @@ describe("GoogleTokenVerifier", () => {
       GoogleTokenVerifier.verifyAuthCode("bad-code", "http://localhost/cb")
     ).rejects.toThrow("Código de autorização do Google inválido ou expirado");
   });
+
+  it("normaliza foto do Google com sufixo de tamanho estável", async () => {
+    mockVerifyIdToken.mockResolvedValue({
+      getPayload: () => ({
+        sub: "google-3",
+        email: "pic@email.com",
+        name: "Pic User",
+        picture: "https://lh3.googleusercontent.com/a/abcd",
+      }),
+    });
+
+    const profile = await GoogleTokenVerifier.verify("id-token");
+
+    expect(profile.avatarUrl).toBe("https://lh3.googleusercontent.com/a/abcd=s96-c");
+  });
 });

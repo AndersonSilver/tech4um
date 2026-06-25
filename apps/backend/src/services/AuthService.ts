@@ -66,8 +66,7 @@ export class AuthService {
       if (existingByEmail) {
         user = await this.userRepository.linkGoogleAccount(
           existingByEmail.id,
-          profile.googleId,
-          profile.avatarUrl
+          profile.googleId
         );
         user = await this.syncGoogleProfile(user, profile);
       } else {
@@ -94,12 +93,24 @@ export class AuthService {
     return trimmed.length > 30 ? trimmed.slice(0, 30) : trimmed;
   }
 
+  private isUserChosenAvatar(avatarUrl?: string | null): boolean {
+    if (!avatarUrl) return false;
+    return avatarUrl.startsWith("/api/avatars/") || avatarUrl.startsWith("/api/uploads/");
+  }
+
   private async syncGoogleProfile(user: User, profile: GoogleProfile): Promise<User> {
     const username = await this.resolveUniqueUsername(profile.name, user.id);
-    return this.userRepository.updateProfile(user.id, {
-      username,
-      avatarUrl: profile.avatarUrl,
-    });
+    const updates: { username: string; avatarUrl?: string } = { username };
+
+    // Não sobrescreve avatar preset/upload escolhido pelo usuário a cada login Google.
+    if (
+      profile.avatarUrl &&
+      (!user.avatarUrl || !this.isUserChosenAvatar(user.avatarUrl))
+    ) {
+      updates.avatarUrl = profile.avatarUrl;
+    }
+
+    return this.userRepository.updateProfile(user.id, updates);
   }
 
   private async resolveUniqueUsername(

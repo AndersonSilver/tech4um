@@ -26,8 +26,8 @@ export class UserRepository {
     return this.repo.findOneOrFail({ where: { id: userId } });
   }
 
-  async linkGoogleAccount(userId: string, googleId: string, avatarUrl?: string) {
-    await this.repo.update(userId, { googleId, avatarUrl });
+  async linkGoogleAccount(userId: string, googleId: string) {
+    await this.repo.update(userId, { googleId });
     return this.repo.findOneOrFail({ where: { id: userId } });
   }
 

@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { Message } from "../types";
 import { resolveMessageImageUrl } from "./ChatMessageComposer";
-import { resolveAvatarUrl, getUserInitial } from "../utils/resolveAvatarUrl";
+import { getUserInitial } from "../utils/resolveAvatarUrl";
+import { AvatarImage } from "./AvatarImage";
 import { ImageLightbox } from "./ImageLightbox";
 import { MessageReactionBar, MessageReactionList } from "./MessageReactions";
 
@@ -57,9 +58,7 @@ export function MessageBubble({
   const displayName = isOwn
     ? "Você"
     : (senderName ?? message.sender?.username ?? "Usuário");
-  const avatarUrl = resolveAvatarUrl(
-    senderAvatarUrl ?? message.sender?.avatarUrl
-  );
+  const resolvedAvatar = senderAvatarUrl ?? message.sender?.avatarUrl;
   const imageSrc = resolveMessageImageUrl(message.imageUrl);
   const emojiOnly = message.content ? isEmojiOnlyMessage(message.content) : false;
   const justifyText = Boolean(message.content && !emojiOnly && shouldJustifyMessage(message.content));
@@ -72,8 +71,12 @@ export function MessageBubble({
         }`}
       >
         <div className="w-9 h-9 rounded-full bg-bordergray overflow-hidden shrink-0">
-          {avatarUrl ? (
-            <img src={avatarUrl} alt={displayName} className="w-full h-full object-cover" />
+          {resolvedAvatar ? (
+            <AvatarImage
+              avatarUrl={resolvedAvatar}
+              alt={displayName}
+              className="w-full h-full object-cover"
+            />
           ) : (
             <span className="flex h-full w-full items-center justify-center font-poppins text-xs text-background bg-primary-dark">
               {getUserInitial(displayName)}

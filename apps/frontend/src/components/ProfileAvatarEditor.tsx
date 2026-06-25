@@ -3,6 +3,7 @@ import { PRESET_AVATARS } from "@tech4um/shared";
 import { useAuth } from "../context/AuthContext";
 import { api } from "../services/api";
 import { getUserInitial, resolveAvatarUrl } from "../utils/resolveAvatarUrl";
+import { AvatarImage } from "./AvatarImage";
 
 type AvatarMode = "upload" | "preset";
 
@@ -123,7 +124,14 @@ export function ProfileAvatarEditor({ username, avatarUrl }: ProfileAvatarEditor
     <div className="flex flex-col gap-6">
       <div className="flex flex-col items-center gap-3 py-2">
         <div className="h-24 w-24 rounded-full overflow-hidden bg-bordergray shrink-0 shadow-compact ring-4 ring-surface/80">
-          {previewAvatarSrc ? (
+          {previewAvatarSrc && !previewAvatarSrc.startsWith("blob:") ? (
+            <AvatarImage
+              avatarUrl={previewAvatarSrc}
+              alt={username}
+              className="h-full w-full object-cover"
+              fallbackClassName="flex h-full w-full items-center justify-center font-poppins text-2xl text-background bg-primary-dark"
+            />
+          ) : previewAvatarSrc ? (
             <img src={previewAvatarSrc} alt={username} className="h-full w-full object-cover" />
           ) : (
             <span className="flex h-full w-full items-center justify-center font-poppins text-2xl text-background bg-primary-dark">
